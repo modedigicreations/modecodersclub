@@ -1474,23 +1474,23 @@ p {
   }
 
   .sticker-top {
-    width: 84px;
-    height: 84px;
-    font-size: 7px;
+    width: 100px;
+    height: 100px;
+    font-size: 8px;
   }
 
   .sticker-top span {
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .sticker-bottom {
-    width: 80px;
-    height: 80px;
-    font-size: 7px;
+    width: 96px;
+    height: 96px;
+    font-size: 8px;
   }
 
   .sticker-bottom span {
-    font-size: 15px;
+    font-size: 17px;
   }
 
   .community-grid {
