@@ -1,12 +1,11 @@
 import Link from "next/link";
-import { courses } from "@/lib/courses";
+import prisma from "@/lib/prisma";
 import { testimonials } from "@/lib/testimonials";
 
-const featuredCourses = [
-  courses[1],
-  courses[0],
-  courses[2],
-];
+// Featured courses come straight from the DB on every request (no caching)
+// so a course added in /admin shows up immediately, not just after the
+// cache expires — that's deliberate, not an oversight; see /courses.
+export const instant = false;
 
 const clubValues = [
   {
@@ -26,7 +25,13 @@ const clubValues = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const featuredCourses = await prisma.course.findMany({
+    where: { archivedAt: null },
+    orderBy: { order: "asc" },
+    take: 3,
+  });
+
   return (
     <main>
         <section className="hero">

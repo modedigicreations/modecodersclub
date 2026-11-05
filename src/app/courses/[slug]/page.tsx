@@ -1,19 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { courses, getCourse } from "@/lib/courses";
+import prisma from "@/lib/prisma";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export function generateStaticParams() {
-  return courses.map((course) => ({ slug: course.slug }));
-}
+// Courses are admin-managed and change without a redeploy, so this route
+// can't enumerate them at build time — it's a normal on-demand dynamic
+// route instead of a prerendered one.
+export const instant = false;
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const course = getCourse(slug);
+  const course = await prisma.course.findUnique({ where: { slug } });
   if (!course) return {};
 
   return {
@@ -24,7 +25,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function CourseDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const course = getCourse(slug);
+  const course = await prisma.course.findFirst({ where: { slug, archivedAt: null } });
   if (!course) notFound();
 
   return (

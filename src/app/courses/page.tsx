@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { courses, freeResources } from "@/lib/courses";
+import prisma from "@/lib/prisma";
 
 export const metadata: Metadata = {
   title: "Explore coding courses",
@@ -8,7 +8,16 @@ export const metadata: Metadata = {
     "Explore Mode Coders Club learning paths in programming, web development, data science, cybersecurity, and design.",
 };
 
-export default function CoursesPage() {
+// Reads the DB directly on every request (no caching) so a course added in
+// /admin shows up immediately instead of waiting out a cache window.
+export const instant = false;
+
+export default async function CoursesPage() {
+  const [courses, freeResources] = await Promise.all([
+    prisma.course.findMany({ where: { archivedAt: null }, orderBy: { order: "asc" } }),
+    prisma.freeResource.findMany({ where: { archivedAt: null }, orderBy: { order: "asc" } }),
+  ]);
+
   return (
     <main>
         <section className="catalog-hero">
