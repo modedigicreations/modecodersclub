@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { courses } from "@/lib/courses";
+import { courses, freeResources } from "@/lib/courses";
 
 export const metadata: Metadata = {
   title: "Explore coding courses",
@@ -37,11 +37,46 @@ export default function CoursesPage() {
                   </div>
                   <div className="course-content">
                     <p className="course-kicker">{course.level}</p>
+                    <span className="price-badge">{course.price}</span>
                     <h2>{course.name}</h2>
                     <p>{course.description}</p>
                     <Link href={`/courses/${course.slug}`}>
                       View course details <span aria-hidden="true">↗</span>
                     </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="section catalog-section resources-section">
+          <div className="container">
+            <div className="catalog-heading">
+              <p>{freeResources.length} free resources</p>
+              <p>Quick skills checks and software basics — no subscription needed.</p>
+            </div>
+            <div className="resource-grid">
+              {freeResources.map((resource) => (
+                <article className="resource-card" key={resource.slug}>
+                  <div className={`resource-icon ${resource.color}`} aria-hidden="true">
+                    {resource.icon}
+                  </div>
+                  <div>
+                    <div className="resource-card-heading">
+                      <p className="course-kicker">{resource.category}</p>
+                      <span className="price-badge is-free">Free</span>
+                    </div>
+                    <h3>{resource.name}</h3>
+                    <p>{resource.description}</p>
+                    <div className="resource-card-footer">
+                      <span>{resource.time}</span>
+                      <a
+                        href={`mailto:info@modecodersclub.com.ng?subject=${encodeURIComponent(`Enquiry: ${resource.name}`)}`}
+                      >
+                        Ask about this <span aria-hidden="true">↗</span>
+                      </a>
+                    </div>
                   </div>
                 </article>
               ))}

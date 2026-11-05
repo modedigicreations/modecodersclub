@@ -9,6 +9,7 @@ export const courses = [
     icon: "{ }",
     color: "orange",
     duration: "10 weeks, 2 sessions a week",
+    price: "₦5,000 every 6 months",
     audience: "First-time programmers and anyone who wants a solid foundation in a widely-used language.",
     outcomes: [
       "Variables, control flow, and functions, from first principles",
@@ -27,6 +28,7 @@ export const courses = [
     icon: "</>",
     color: "mint",
     duration: "12 weeks, 2 sessions a week",
+    price: "₦5,000 every 6 months",
     audience: "Learners who want to build and ship real websites and web apps, start to finish.",
     outcomes: [
       "HTML, CSS, and modern JavaScript fundamentals",
@@ -45,6 +47,7 @@ export const courses = [
     icon: "01",
     color: "lavender",
     duration: "10 weeks, 2 sessions a week",
+    price: "₦5,000 every 6 months",
     audience: "Curious minds who like numbers, patterns, and asking \"what does this actually mean?\"",
     outcomes: [
       "Cleaning and exploring real datasets",
@@ -63,6 +66,7 @@ export const courses = [
     icon: "⌘",
     color: "blue",
     duration: "8 weeks, 2 sessions a week",
+    price: "₦5,000 every 6 months",
     audience: "Anyone who wants to understand how systems get attacked, and how to defend them responsibly.",
     outcomes: [
       "How common attacks actually work, and how to recognize them",
@@ -81,12 +85,32 @@ export const courses = [
     icon: "◉",
     color: "pink",
     duration: "8 weeks, 2 sessions a week",
+    price: "₦5,000 every 6 months",
     audience: "Learners who want to design products people actually enjoy using, not just pretty screens.",
     outcomes: [
       "Understanding users before you design for them",
       "Wireframing and prototyping real screens",
       "Visual design fundamentals: layout, type, and color",
       "Presenting and defending your design decisions",
+    ],
+  },
+  {
+    slug: "artificial-intelligence",
+    name: "Artificial Intelligence",
+    category: "Artificial Intelligence",
+    level: "Think, then build with AI",
+    description:
+      "Understand how modern AI and machine learning actually work, then use that understanding to build real, practical projects.",
+    icon: "AI",
+    color: "teal",
+    duration: "10 weeks, 2 sessions a week",
+    price: "₦5,000 every 6 months",
+    audience: "Learners curious about how AI tools actually work, not just how to prompt them.",
+    outcomes: [
+      "How machine learning models learn from data, explained in plain language",
+      "Hands-on practice with real AI tools and APIs",
+      "Thinking critically about AI: bias, limits, and responsible use",
+      "A small AI-powered project you build and demo",
     ],
   },
 ] as const;
@@ -96,3 +120,51 @@ export type Course = (typeof courses)[number];
 export function getCourse(slug: string): Course | undefined {
   return courses.find((course) => course.slug === slug);
 }
+
+// Shorter, free, single-session items — skills checks and software basics,
+// not full learning paths. Kept separate from `courses` because they don't
+// share its shape (no weeks-long duration, no multi-point outcomes list).
+export const freeResources = [
+  {
+    slug: "computational-thinking-assessment",
+    name: "Computational Thinking: Baseline Diagnostic Assessment",
+    category: "Computational Thinking",
+    description:
+      "A short diagnostic that measures where you're starting from — patterns, logic, and breaking problems into steps — before you begin a learning path.",
+    icon: "✓",
+    color: "mint",
+    time: "30–45 minutes",
+  },
+  {
+    slug: "scratch-exam",
+    name: "Scratch Exam",
+    category: "Computational Thinking",
+    description:
+      "A hands-on assessment in Scratch for learners getting their first introduction to block-based programming.",
+    icon: "✦",
+    color: "orange",
+    time: "1 hour",
+  },
+  {
+    slug: "microsoft-word",
+    name: "Microsoft Word",
+    category: "Digital Literacy",
+    description:
+      "Practical, exam-style practice for core Microsoft Word skills: formatting, documents, and everyday office tasks.",
+    icon: "W",
+    color: "blue",
+    time: "Self-paced",
+  },
+  {
+    slug: "microsoft-excel",
+    name: "Microsoft Excel",
+    category: "Digital Literacy",
+    description:
+      "Practical, exam-style practice for core Microsoft Excel skills: spreadsheets, formulas, and everyday office tasks.",
+    icon: "X",
+    color: "lavender",
+    time: "Self-paced",
+  },
+] as const;
+
+export type FreeResource = (typeof freeResources)[number];

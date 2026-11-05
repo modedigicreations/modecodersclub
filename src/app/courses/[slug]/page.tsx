@@ -47,6 +47,10 @@ export default async function CourseDetailPage({ params }: PageProps) {
               <p>{course.duration}</p>
             </div>
             <div>
+              <p>Price</p>
+              <p>{course.price}</p>
+            </div>
+            <div>
               <p>Who it&rsquo;s for</p>
               <p>{course.audience}</p>
             </div>

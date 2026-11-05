@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { courses } from "@/lib/courses";
+import { testimonials } from "@/lib/testimonials";
 
 const featuredCourses = [
   courses[1],
@@ -128,6 +129,7 @@ export default function Home() {
                   </div>
                   <div className="course-content">
                     <p className="course-kicker">A learning path</p>
+                    <span className="price-badge">{course.price}</span>
                     <h3>{course.name}</h3>
                     <p>{course.description}</p>
                     <Link href={`/courses/${course.slug}`} aria-label={`Learn about ${course.name}`}>
@@ -167,6 +169,35 @@ export default function Home() {
               ))}
             </div>
             <span className="community-decoration" aria-hidden="true">&lt; / &gt;</span>
+          </div>
+        </section>
+
+        <section className="section testimonials-section">
+          <div className="container">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Our students</p>
+                <h2>Still deciding?<br /><span>Hear from them.</span></h2>
+              </div>
+              <div className="section-intro">
+                <p>
+                  We&rsquo;re still a growing club, but here&rsquo;s what
+                  members already say about learning with us.
+                </p>
+              </div>
+            </div>
+            <div className="testimonial-grid">
+              {testimonials.map((testimonial) => (
+                <article className="testimonial-card" key={testimonial.name}>
+                  <p className="testimonial-rating" aria-label={`${testimonial.rating} out of 5 stars`}>
+                    {"★".repeat(Math.round(testimonial.rating))}
+                    {"☆".repeat(5 - Math.round(testimonial.rating))}
+                  </p>
+                  <p className="testimonial-quote">&ldquo;{testimonial.quote}&rdquo;</p>
+                  <p className="testimonial-name">{testimonial.name}</p>
+                </article>
+              ))}
+            </div>
           </div>
         </section>
 
