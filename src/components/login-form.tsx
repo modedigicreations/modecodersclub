@@ -55,8 +55,7 @@ export function LoginForm() {
           </button>
         </form>
         <p className="auth-footer-note">
-          Learner at Mode Coders Club?{" "}
-          <a href="mailto:info@modecodersclub.com.ng?subject=Community%20account">Ask about a community account</a>.
+          New to the community? <a href="/register">Create an account</a>.
         </p>
       </section>
     </main>
