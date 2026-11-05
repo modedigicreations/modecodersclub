@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CertificateStatus {
+  ACTIVE
+  REVOKED
+}
+
+// Better Auth's own tables (naming/shape required by the adapter).
+model User {
+  id            String   @id
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  role          String   @default("learner") @db.VarChar(32)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions Session[]
+  accounts Account[]
+
+  issuedCertificates  Certificate[]  @relation("CertificateIssuer")
+  revokedCertificates Certificate[]  @relation("CertificateRevoker")
+  createdForumSessions ForumSession[] @relation("ForumSessionCreator")
+  forumPosts          ForumPost[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// Dynamic course catalog — replaces the hardcoded array in src/lib/courses.ts.
+model Course {
+  id          String   @id @default(cuid())
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(120)
+  category    String   @db.VarChar(80)
+  level       String   @db.VarChar(160)
+  description String   @db.VarChar(500)
+  icon        String   @db.VarChar(8)
+  color       String   @db.VarChar(20)
+  duration    String   @db.VarChar(80)
+  price       String   @db.VarChar(80)
+  audience    String   @db.VarChar(300)
+  outcomes    String[]
+  order       Int      @default(0)
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([order])
+}
+
+model FreeResource {
+  id          String   @id @default(cuid())
+  slug        String   @unique @db.VarChar(80)
+  name        String   @db.VarChar(120)
+  category    String   @db.VarChar(80)
+  description String   @db.VarChar(500)
+  icon        String   @db.VarChar(8)
+  color       String   @db.VarChar(20)
+  time        String   @db.VarChar(40)
+  order       Int      @default(0)
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([order])
+}
+
+// Admin-issued completion certificates (see src/lib/certificate-verification.ts).
+model Certificate {
+  id                String            @id @default(cuid())
+  certificateNumber String            @unique @db.VarChar(40)
+  recipientName     String            @db.VarChar(120)
+  courseName        String            @db.VarChar(120)
+  status            CertificateStatus @default(ACTIVE)
+  issuedAt          DateTime          @default(now())
+  issuedById        String
+  issuedBy          User              @relation("CertificateIssuer", fields: [issuedById], references: [id])
+  revokedAt         DateTime?
+  revokedById       String?
+  revokedBy         User?             @relation("CertificateRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
+  revocationReason  String?           @db.VarChar(1000)
+
+  @@index([issuedAt])
+}
+
+// Weekly community discussion sessions ("Community" nav).
+model ForumSession {
+  id          String   @id @default(cuid())
+  weekNumber  Int
+  title       String   @db.VarChar(160)
+  prompt      String   @db.VarChar(2000)
+  startsAt    DateTime
+  createdById String
+  createdBy   User     @relation("ForumSessionCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  posts ForumPost[]
+
+  @@index([startsAt])
+}
+
+model ForumPost {
+  id        String       @id @default(cuid())
+  sessionId String
+  session   ForumSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User         @relation(fields: [authorId], references: [id])
+  body      String       @db.VarChar(4000)
+  createdAt DateTime     @default(now())
+  hiddenAt  DateTime?
+
+  @@index([sessionId, createdAt])
+  @@index([authorId, createdAt])
+}
