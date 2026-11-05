@@ -32,24 +32,7 @@ const activities = [
 
 export default function AboutPage() {
   return (
-    <>
-      <header className="site-header">
-        <div className="container header-inner">
-          <Link className="brand" href="/" aria-label="Mode Coders Club home">
-            <span className="brand-mark" aria-hidden="true">&lt;/&gt;</span>
-            <span className="brand-name">MODE<span>CODERS CLUB</span></span>
-          </Link>
-          <nav className="main-nav" aria-label="Main navigation">
-            <Link href="/courses">Courses</Link>
-            <Link aria-current="page" href="/about">About the club</Link>
-            <a href="mailto:info@modecodersclub.com.ng?subject=School%20partnership">For schools</a>
-          </nav>
-          <a className="button button-small button-dark" href="mailto:info@modecodersclub.com.ng?subject=Mode%20Coders%20Club%20membership">
-            Get in touch <span aria-hidden="true">↗</span>
-          </a>
-        </div>
-      </header>
-      <main>
+    <main>
         <section className="catalog-hero about-hero">
           <div className="container">
             <p className="eyebrow"><span /> Our community</p>
@@ -58,6 +41,11 @@ export default function AboutPage() {
               Mode Coders Club brings learners and technology enthusiasts
               together to discover, create, and support each other’s growth.
               No matter where your coding journey begins, there’s room to learn.
+            </p>
+            <p>
+              Mode Coders Club is powered by MODE DigiSchool, bringing the
+              same hands-on, project-based approach to students inside the
+              school environment.
             </p>
           </div>
         </section>
@@ -101,25 +89,6 @@ export default function AboutPage() {
             </Link>
           </div>
         </section>
-      </main>
-      <footer className="site-footer">
-        <div className="container footer-main">
-          <Link className="brand brand-footer" href="/" aria-label="Mode Coders Club home">
-            <span className="brand-mark" aria-hidden="true">&lt;/&gt;</span>
-            <span className="brand-name">MODE<span>CODERS CLUB</span></span>
-          </Link>
-          <p>Empowering the future, one coder at a time.</p>
-          <div className="footer-links">
-            <Link href="/courses">Courses</Link>
-            <Link href="/about">About</Link>
-            <a href="mailto:info@modecodersclub.com.ng">Contact</a>
-          </div>
-        </div>
-        <div className="container footer-bottom">
-          <span>© {new Date().getFullYear()} Mode Coders Club</span>
-          <span>Learn with purpose. Build with care.</span>
-        </div>
-      </footer>
-    </>
+    </main>
   );
 }

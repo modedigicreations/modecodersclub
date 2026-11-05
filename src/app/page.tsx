@@ -27,33 +27,7 @@ const clubValues = [
 
 export default function Home() {
   return (
-    <>
-      <header className="site-header">
-        <div className="container header-inner">
-          <Link className="brand" href="/" aria-label="Mode Coders Club home">
-            <span className="brand-mark" aria-hidden="true">&lt;/&gt;</span>
-            <span className="brand-name">
-              MODE
-              <span>CODERS CLUB</span>
-            </span>
-          </Link>
-          <nav className="main-nav" aria-label="Main navigation">
-            <Link href="/courses">Courses</Link>
-            <Link href="/about">About the club</Link>
-            <a href="mailto:info@modecodersclub.com.ng?subject=School%20partnership">
-              For schools
-            </a>
-          </nav>
-          <a
-            className="button button-small button-dark"
-            href="mailto:info@modecodersclub.com.ng?subject=Mode%20Coders%20Club%20membership"
-          >
-            Get in touch <span aria-hidden="true">↗</span>
-          </a>
-        </div>
-      </header>
-
-      <main>
+    <main>
         <section className="hero">
           <div className="container hero-grid">
             <div className="hero-copy">
@@ -99,7 +73,7 @@ export default function Home() {
                   <b>your-next-idea.js</b>
                 </div>
                 <div className="code-lines" aria-hidden="true">
-                  <p><i>01</i><span className="code-purple">const</span> idea = <span className="code-green">"what if?"</span>;</p>
+                  <p><i>01</i><span className="code-purple">const</span> idea = <span className="code-green">&quot;what if?&quot;</span>;</p>
                   <p><i>02</i></p>
                   <p><i>03</i><span className="code-purple">function</span> <span className="code-yellow">buildSomething</span>() {"{"}</p>
                   <p><i>04</i>&nbsp;&nbsp;learn();</p>
@@ -107,7 +81,7 @@ export default function Home() {
                   <p><i>06</i>&nbsp;&nbsp;makeItReal();</p>
                   <p><i>07</i>{"}"}</p>
                   <p><i>08</i></p>
-                  <p><i>09</i><span className="code-muted">// your journey starts here</span></p>
+                  <p><i>09</i><span className="code-muted">{"// your journey starts here"}</span></p>
                   <p><i>10</i><span className="code-cursor" /></p>
                 </div>
               </div>
@@ -156,7 +130,7 @@ export default function Home() {
                     <p className="course-kicker">A learning path</p>
                     <h3>{course.name}</h3>
                     <p>{course.description}</p>
-                    <Link href={`/courses#${course.slug}`} aria-label={`Learn about ${course.name}`}>
+                    <Link href={`/courses/${course.slug}`} aria-label={`Learn about ${course.name}`}>
                       Explore course <span aria-hidden="true">↗</span>
                     </Link>
                   </div>
@@ -244,26 +218,6 @@ export default function Home() {
             <span className="closing-star" aria-hidden="true">✳</span>
           </div>
         </section>
-      </main>
-
-      <footer className="site-footer">
-        <div className="container footer-main">
-          <Link className="brand brand-footer" href="/" aria-label="Mode Coders Club home">
-            <span className="brand-mark" aria-hidden="true">&lt;/&gt;</span>
-            <span className="brand-name">MODE<span>CODERS CLUB</span></span>
-          </Link>
-          <p>Empowering the future, one coder at a time.</p>
-          <div className="footer-links">
-            <Link href="/courses">Courses</Link>
-            <Link href="/about">About</Link>
-            <a href="mailto:info@modecodersclub.com.ng">Contact</a>
-          </div>
-        </div>
-        <div className="container footer-bottom">
-          <span>© {new Date().getFullYear()} Mode Coders Club</span>
-          <span>Learn with purpose. Build with care.</span>
-        </div>
-      </footer>
-    </>
+    </main>
   );
 }

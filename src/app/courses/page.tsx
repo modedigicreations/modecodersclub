@@ -10,24 +10,7 @@ export const metadata: Metadata = {
 
 export default function CoursesPage() {
   return (
-    <>
-      <header className="site-header">
-        <div className="container header-inner">
-          <Link className="brand" href="/" aria-label="Mode Coders Club home">
-            <span className="brand-mark" aria-hidden="true">&lt;/&gt;</span>
-            <span className="brand-name">MODE<span>CODERS CLUB</span></span>
-          </Link>
-          <nav className="main-nav" aria-label="Main navigation">
-            <Link aria-current="page" href="/courses">Courses</Link>
-            <Link href="/about">About the club</Link>
-            <a href="mailto:info@modecodersclub.com.ng?subject=School%20partnership">For schools</a>
-          </nav>
-          <a className="button button-small button-dark" href="mailto:info@modecodersclub.com.ng?subject=Mode%20Coders%20Club%20membership">
-            Get in touch <span aria-hidden="true">↗</span>
-          </a>
-        </div>
-      </header>
-      <main>
+    <main>
         <section className="catalog-hero">
           <div className="container">
             <p className="eyebrow"><span /> Find your starting point</p>
@@ -56,34 +39,15 @@ export default function CoursesPage() {
                     <p className="course-kicker">{course.level}</p>
                     <h2>{course.name}</h2>
                     <p>{course.description}</p>
-                    <a href={`mailto:info@modecodersclub.com.ng?subject=${encodeURIComponent(`Course enquiry: ${course.name}`)}`}>
-                      Ask about this course <span aria-hidden="true">↗</span>
-                    </a>
+                    <Link href={`/courses/${course.slug}`}>
+                      View course details <span aria-hidden="true">↗</span>
+                    </Link>
                   </div>
                 </article>
               ))}
             </div>
           </div>
         </section>
-      </main>
-      <footer className="site-footer">
-        <div className="container footer-main">
-          <Link className="brand brand-footer" href="/" aria-label="Mode Coders Club home">
-            <span className="brand-mark" aria-hidden="true">&lt;/&gt;</span>
-            <span className="brand-name">MODE<span>CODERS CLUB</span></span>
-          </Link>
-          <p>Empowering the future, one coder at a time.</p>
-          <div className="footer-links">
-            <Link href="/courses">Courses</Link>
-            <Link href="/about">About</Link>
-            <a href="mailto:info@modecodersclub.com.ng">Contact</a>
-          </div>
-        </div>
-        <div className="container footer-bottom">
-          <span>© {new Date().getFullYear()} Mode Coders Club</span>
-          <span>Learn with purpose. Build with care.</span>
-        </div>
-      </footer>
-    </>
+    </main>
   );
 }
