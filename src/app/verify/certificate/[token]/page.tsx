@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { verifyCertificateVerificationToken } from "@/lib/certificate-verification";
 import prisma from "@/lib/prisma";
@@ -29,7 +30,9 @@ export default async function CertificateVerificationPage({ params }: PageProps)
     <main className="auth-page">
       <section className={`auth-card ${verified ? "" : "auth-card-invalid"}`} style={{ maxWidth: 460 }}>
         <Link className="brand" href="/" aria-label="Mode Coders Club home" style={{ marginBottom: 20 }}>
-          <span className="brand-mark" aria-hidden="true">&lt;/&gt;</span>
+          <span className="brand-mark" aria-hidden="true">
+            <Image src="/mode-digischool-logo.png" alt="" width={42} height={46} />
+          </span>
           <span className="brand-name">MODE<span>CODERS CLUB</span></span>
         </Link>
         <p className="eyebrow" style={{ color: verified ? "var(--green-dark)" : "#b1467a" }}>

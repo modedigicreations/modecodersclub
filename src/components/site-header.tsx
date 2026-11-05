@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -19,7 +20,9 @@ export function SiteHeader() {
     <header className="site-header">
       <div className="container header-inner">
         <Link className="brand" href="/" aria-label="Mode Coders Club home" onClick={closeMenu}>
-          <span className="brand-mark" aria-hidden="true">&lt;/&gt;</span>
+          <span className="brand-mark" aria-hidden="true">
+            <Image src="/mode-digischool-logo.png" alt="" width={42} height={46} priority />
+          </span>
           <span className="brand-name">
             MODE
             <span>CODERS CLUB</span>

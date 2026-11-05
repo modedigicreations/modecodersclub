@@ -16,7 +16,9 @@ export async function SiteFooter() {
     <footer className="site-footer">
       <div className="container footer-main">
         <Link className="brand brand-footer" href="/" aria-label="Mode Coders Club home">
-          <span className="brand-mark" aria-hidden="true">&lt;/&gt;</span>
+          <span className="brand-mark" aria-hidden="true">
+            <Image src="/mode-digischool-logo.png" alt="" width={36} height={40} />
+          </span>
           <span className="brand-name">MODE<span>CODERS CLUB</span></span>
         </Link>
         <p>Empowering the future, one coder at a time.</p>
@@ -28,16 +30,7 @@ export async function SiteFooter() {
       </div>
       <div className="container footer-bottom">
         <span>© {year} Mode Coders Club</span>
-        <div className="powered-by">
-          <span>Powered by</span>
-          <Image
-            src="/mode-digischool-logo.png"
-            alt="MODE DigiSchool"
-            width={22}
-            height={24}
-          />
-          <span>MODE DigiSchool</span>
-        </div>
+        <span>Part of MODE DigiSchool</span>
       </div>
     </footer>
   );
