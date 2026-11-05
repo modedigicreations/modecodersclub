@@ -1,3 +1,4 @@
+import { createCertificateVerificationToken } from "@/lib/certificate-verification";
 import prisma from "@/lib/prisma";
 import { issueCertificate, revokeCertificate } from "./actions";
 
@@ -11,6 +12,16 @@ export default async function AdminCertificatesPage({
     prisma.certificate.findMany({ orderBy: { issuedAt: "desc" } }),
     prisma.course.findMany({ where: { archivedAt: null }, orderBy: { order: "asc" } }),
   ]);
+  const baseUrl = process.env.BETTER_AUTH_URL ?? "";
+
+  function verifyUrl(certificateId: string): string | null {
+    if (!baseUrl) return null;
+    try {
+      return `${baseUrl}/verify/certificate/${createCertificateVerificationToken(certificateId)}`;
+    } catch {
+      return null;
+    }
+  }
 
   return (
     <div>
@@ -72,6 +83,11 @@ export default async function AdminCertificatesPage({
                 <td>
                   <div className="admin-actions">
                     <a href={`/api/certificates/${certificate.id}/pdf`}>Download PDF</a>
+                    {verifyUrl(certificate.id) && (
+                      <a href={verifyUrl(certificate.id)!} target="_blank" rel="noopener noreferrer">
+                        Verify link
+                      </a>
+                    )}
                     {certificate.status === "ACTIVE" && (
                       <form action={revokeCertificate.bind(null, certificate.id)} style={{ display: "flex", gap: 6 }}>
                         <input
