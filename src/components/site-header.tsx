@@ -34,12 +34,9 @@ export function SiteHeader() {
           <a href="mailto:info@modecodersclub.com.ng?subject=School%20partnership">For schools</a>
         </nav>
         <div className="header-actions">
-          <a
-            className="button button-small button-dark"
-            href="mailto:info@modecodersclub.com.ng?subject=Mode%20Coders%20Club%20membership"
-          >
+          <Link className="button button-small button-dark" href="/contact">
             Get in touch <span aria-hidden="true">↗</span>
-          </a>
+          </Link>
           <button
             type="button"
             className="menu-toggle"

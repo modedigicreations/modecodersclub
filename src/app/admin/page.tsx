@@ -2,11 +2,12 @@ import Link from "next/link";
 import prisma from "@/lib/prisma";
 
 export default async function AdminDashboardPage() {
-  const [courseCount, resourceCount, certificateCount, forumSessionCount] = await Promise.all([
+  const [courseCount, resourceCount, certificateCount, forumSessionCount, userCount] = await Promise.all([
     prisma.course.count({ where: { archivedAt: null } }),
     prisma.freeResource.count({ where: { archivedAt: null } }),
     prisma.certificate.count(),
     prisma.forumSession.count(),
+    prisma.user.count(),
   ]);
 
   const cards = [
@@ -14,6 +15,7 @@ export default async function AdminDashboardPage() {
     { href: "/admin/resources", label: "Free resources", value: resourceCount },
     { href: "/admin/certificates", label: "Certificates issued", value: certificateCount },
     { href: "/admin/forum", label: "Forum sessions", value: forumSessionCount },
+    { href: "/admin/users", label: "Users", value: userCount },
   ];
 
   return (

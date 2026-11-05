@@ -23,7 +23,7 @@ export async function SiteFooter() {
         <div className="footer-links">
           <Link href="/courses">Courses</Link>
           <Link href="/about">About</Link>
-          <a href="mailto:info@modecodersclub.com.ng">Contact</a>
+          <Link href="/contact">Contact</Link>
         </div>
       </div>
       <div className="container footer-bottom">

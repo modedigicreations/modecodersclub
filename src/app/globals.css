@@ -1479,10 +1479,18 @@ p {
     font-size: 7px;
   }
 
+  .sticker-top span {
+    font-size: 14px;
+  }
+
   .sticker-bottom {
     width: 80px;
     height: 80px;
     font-size: 7px;
+  }
+
+  .sticker-bottom span {
+    font-size: 15px;
   }
 
   .community-grid {
