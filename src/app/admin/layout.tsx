@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SignOutButton } from "@/components/sign-out-button";
 import { requireAdmin } from "@/lib/session";
 
 export const metadata: Metadata = {
@@ -37,6 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <p className="auth-footer-note" style={{ marginTop: 24, textAlign: "left" }}>
           Signed in as {session.user.email}
         </p>
+        <SignOutButton className="text-link" />
       </aside>
       <div className="admin-main">{children}</div>
     </div>

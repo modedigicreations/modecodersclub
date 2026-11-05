@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SignOutButton } from "@/components/sign-out-button";
 import { getSession } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { createPost } from "../actions";
@@ -70,6 +71,9 @@ export default async function CommunitySessionPage({ params, searchParams }: Pag
 
           {viewerSession ? (
             <form className="reply-form" action={createPost.bind(null, id)}>
+              <p className="auth-footer-note" style={{ textAlign: "left", marginTop: 0 }}>
+                Posting as {viewerSession.user.name}. <SignOutButton className="text-link" />
+              </p>
               <textarea name="body" placeholder="Share your thoughts or ask a question…" required maxLength={4000} />
               <button className="button button-primary" type="submit">
                 Post reply
