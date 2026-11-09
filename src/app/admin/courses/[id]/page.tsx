@@ -21,7 +21,7 @@ export default async function EditCoursePage({
       <div className="admin-header">
         <h1>Edit {course.name}</h1>
         <Link href={`/instructor/courses/${course.id}`} className="text-link">
-          Manage lessons &amp; students <span aria-hidden="true">→</span>
+          Manage lessons, students &amp; instructors <span aria-hidden="true">→</span>
         </Link>
       </div>
       {error && <p className="auth-error">{error}</p>}

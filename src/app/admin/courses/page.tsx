@@ -48,6 +48,7 @@ export default async function AdminCoursesPage({
                 <td>
                   <div className="admin-actions">
                     <Link href={`/admin/courses/${course.id}`}>Edit</Link>
+                    <Link href={`/instructor/courses/${course.id}`}>Lessons &amp; instructors</Link>
                     <form action={setCourseArchived.bind(null, course.id, !course.archivedAt)}>
                       <button type="submit">{course.archivedAt ? "Unarchive" : "Archive"}</button>
                     </form>
