@@ -43,8 +43,8 @@ export function SiteHeader() {
               {link.label}
             </Link>
           ))}
-          <a href="mailto:info@modecodersclub.com.ng?subject=School%20partnership">For schools</a>
-          {session && <Link href={dashboardHref(role)}>Dashboard</Link>}
+          <Link href="/contact">For schools</Link>
+          {session ? <Link href={dashboardHref(role)}>Dashboard</Link> : <Link href="/login">Sign in</Link>}
         </nav>
         <div className="header-actions">
           <Link className="button button-small button-dark" href="/contact">
@@ -77,12 +77,16 @@ export function SiteHeader() {
               {link.label}
             </Link>
           ))}
-          <a href="mailto:info@modecodersclub.com.ng?subject=School%20partnership" onClick={closeMenu}>
+          <Link href="/contact" onClick={closeMenu}>
             For schools
-          </a>
-          {session && (
+          </Link>
+          {session ? (
             <Link href={dashboardHref(role)} onClick={closeMenu}>
               Dashboard
+            </Link>
+          ) : (
+            <Link href="/login" onClick={closeMenu}>
+              Sign in
             </Link>
           )}
         </nav>
