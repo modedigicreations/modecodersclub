@@ -220,9 +220,9 @@ export default async function Home() {
                   <h3>Find your next step</h3>
                   <p>Explore coding, meet your community, and make something you’re proud of.</p>
                 </div>
-                <a href="mailto:info@modecodersclub.com.ng?subject=Learner%20membership">
+                <Link href="/contact">
                   Ask about membership <span aria-hidden="true">→</span>
-                </a>
+                </Link>
               </article>
               <article className="pathway-card pathway-school">
                 <span className="pathway-icon" aria-hidden="true">⌂</span>
@@ -231,9 +231,9 @@ export default async function Home() {
                   <h3>Bring coding to your school</h3>
                   <p>Talk to us about school cohorts, workshops, and learning resources.</p>
                 </div>
-                <a href="mailto:info@modecodersclub.com.ng?subject=School%20partnership">
+                <Link href="/contact">
                   Start a conversation <span aria-hidden="true">→</span>
-                </a>
+                </Link>
               </article>
             </div>
           </div>
@@ -245,12 +245,9 @@ export default async function Home() {
               <p className="eyebrow eyebrow-light">The next idea could be yours</p>
               <h2>Let’s make<br />something <span>real.</span></h2>
             </div>
-            <a
-              className="button button-light"
-              href="mailto:info@modecodersclub.com.ng?subject=Mode%20Coders%20Club"
-            >
+            <Link className="button button-light" href="/contact">
               Talk to the club <span aria-hidden="true">↗</span>
-            </a>
+            </Link>
             <span className="closing-star" aria-hidden="true">✳</span>
           </div>
         </section>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { SignOutButton } from "@/components/sign-out-button";
 
 const navLinks = [
   { href: "/courses", label: "Courses" },
@@ -44,7 +45,14 @@ export function SiteHeader() {
             </Link>
           ))}
           <Link href="/contact">For schools</Link>
-          {session ? <Link href={dashboardHref(role)}>Dashboard</Link> : <Link href="/login">Sign in</Link>}
+          {session ? (
+            <>
+              <Link href={dashboardHref(role)}>Dashboard</Link>
+              <SignOutButton className="nav-signout" />
+            </>
+          ) : (
+            <Link href="/login">Sign in</Link>
+          )}
         </nav>
         <div className="header-actions">
           <Link className="button button-small button-dark" href="/contact">
@@ -81,9 +89,12 @@ export function SiteHeader() {
             For schools
           </Link>
           {session ? (
-            <Link href={dashboardHref(role)} onClick={closeMenu}>
-              Dashboard
-            </Link>
+            <>
+              <Link href={dashboardHref(role)} onClick={closeMenu}>
+                Dashboard
+              </Link>
+              <SignOutButton className="nav-signout" />
+            </>
           ) : (
             <Link href="/login" onClick={closeMenu}>
               Sign in

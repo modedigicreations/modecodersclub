@@ -31,13 +31,20 @@ function buildAuth() {
         if (name.length < 2 || name.length > 100) {
           return { error: "invalid_name", errorDescription: "Name must be between 2 and 100 characters." };
         }
+        // `input: true` lets self-registration choose "learner" or
+        // "instructor" (see RegisterForm) — never "admin", which this
+        // blocks regardless of what a crafted request sends.
+        const role = (user as { role?: unknown }).role;
+        if (role !== undefined && role !== "learner" && role !== "instructor") {
+          return { error: "invalid_role", errorDescription: "Role must be \"learner\" or \"instructor\"." };
+        }
       },
       additionalFields: {
         role: {
           type: "string",
           required: false,
           defaultValue: "learner",
-          input: false,
+          input: true,
         },
       },
     },

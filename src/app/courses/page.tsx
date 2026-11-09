@@ -80,11 +80,9 @@ export default async function CoursesPage() {
                     <p>{resource.description}</p>
                     <div className="resource-card-footer">
                       <span>{resource.time}</span>
-                      <a
-                        href={`mailto:info@modecodersclub.com.ng?subject=${encodeURIComponent(`Enquiry: ${resource.name}`)}`}
-                      >
+                      <Link href="/contact">
                         Ask about this <span aria-hidden="true">↗</span>
-                      </a>
+                      </Link>
                     </div>
                   </div>
                 </article>

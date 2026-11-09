@@ -18,15 +18,16 @@ export function RegisterForm() {
     const name = String(formData.get("name") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+    const role = formData.get("role") === "instructor" ? "instructor" : "learner";
 
     try {
-      const result = await authClient.signUp.email({ name, email, password });
+      const result = await authClient.signUp.email({ name, email, password, role });
       if (result.error) {
         setErrorMessage(result.error.message ?? "Could not create your account. Please try again.");
         return;
       }
 
-      router.replace("/community");
+      router.replace(role === "instructor" ? "/instructor" : "/community");
       router.refresh();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to reach Mode Coders Club. Please try again.");
@@ -43,6 +44,22 @@ export function RegisterForm() {
           For posting in the weekly discussion sessions. No account needed just to browse courses.
         </p>
         <form onSubmit={submit}>
+          <div className="auth-field">
+            <label>I&rsquo;m joining as a&hellip;</label>
+            <div className="auth-role-choice">
+              <label>
+                <input type="radio" name="role" value="learner" defaultChecked />
+                Student
+              </label>
+              <label>
+                <input type="radio" name="role" value="instructor" />
+                Instructor
+              </label>
+            </div>
+            <p className="auth-role-note">
+              Instructor accounts still need an admin to assign you to a course before you can manage it.
+            </p>
+          </div>
           <div className="auth-field">
             <label htmlFor="name">Name</label>
             <input id="name" name="name" type="text" autoComplete="name" required minLength={2} maxLength={100} />

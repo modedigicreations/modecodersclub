@@ -78,12 +78,9 @@ export default async function CourseDetailPage({ params }: PageProps) {
               Ready to start, or still have questions? We&rsquo;re happy to talk
               you through what the {course.name} path involves.
             </p>
-            <a
-              className="button button-primary"
-              href={`mailto:info@modecodersclub.com.ng?subject=${encodeURIComponent(`Course enquiry: ${course.name}`)}`}
-            >
+            <Link className="button button-primary" href="/contact">
               Ask about this course <span aria-hidden="true">↗</span>
-            </a>
+            </Link>
           </div>
 
           <p style={{ marginTop: 40 }}>
