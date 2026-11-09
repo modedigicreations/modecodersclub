@@ -62,13 +62,14 @@ export async function POST(request: Request, { params }: RouteContext) {
       max_tokens: 2500,
       system:
         "You write short multiple-choice assessments for a students' coding club. " +
-        "Call the submit_assessment_draft tool exactly once. Every question needs exactly 4 options " +
-        "and a correctIndex from 0-3. Keep questions unambiguous and at the stated difficulty.",
+        "You must respond by calling the submit_assessment_draft tool exactly once, and nothing " +
+        "else — no text before or after the tool call. Every question needs exactly 4 options and " +
+        "a correctIndex from 0-3. Keep questions unambiguous and at the stated difficulty.",
       messages: [
         { role: "user", content: `Lesson: "${lesson.title}". Topic: ${topic}. Difficulty: ${difficulty}. Write ${count} questions.` },
       ],
       tools: [DRAFT_TOOL],
-      tool_choice: { type: "tool", name: "submit_assessment_draft" },
+      tool_choice: { type: "auto" },
     });
 
     const toolUse = response.content.find((block) => block.type === "tool_use");

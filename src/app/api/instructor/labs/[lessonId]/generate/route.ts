@@ -55,13 +55,14 @@ export async function POST(request: Request, { params }: RouteContext) {
       max_tokens: 2000,
       system:
         "You write short, beginner-friendly HTML/CSS/JS coding labs for a students' coding club. " +
-        "Call the submit_lab_draft tool exactly once with your draft. Keep starter code minimal " +
-        "(a handful of lines) so the student has real work left to do — never submit a finished solution.",
+        "You must respond by calling the submit_lab_draft tool exactly once with your draft, and " +
+        "nothing else — no text before or after the tool call. Keep starter code minimal (a handful " +
+        "of lines) so the student has real work left to do — never submit a finished solution.",
       messages: [
         { role: "user", content: `Lesson: "${lesson.title}". Topic: ${topic}. Difficulty: ${difficulty}.` },
       ],
       tools: [DRAFT_TOOL],
-      tool_choice: { type: "tool", name: "submit_lab_draft" },
+      tool_choice: { type: "auto" },
     });
 
     const toolUse = response.content.find((block) => block.type === "tool_use");
