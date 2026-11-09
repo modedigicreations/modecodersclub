@@ -26,7 +26,8 @@ export function LoginForm() {
       }
 
       const role = (result.data?.user as { role?: string } | undefined)?.role;
-      router.replace(role === "admin" ? "/admin" : "/community");
+      const destination = role === "admin" ? "/admin" : role === "instructor" ? "/instructor" : "/dashboard";
+      router.replace(destination);
       router.refresh();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to reach Mode Coders Club. Please try again.");

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { authClient } from "@/lib/auth-client";
 
 const navLinks = [
   { href: "/courses", label: "Courses" },
@@ -11,10 +12,18 @@ const navLinks = [
   { href: "/about", label: "About the club" },
 ] as const;
 
+function dashboardHref(role: string | undefined) {
+  if (role === "admin") return "/admin";
+  if (role === "instructor") return "/instructor";
+  return "/dashboard";
+}
+
 export function SiteHeader() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const closeMenu = () => setMenuOpen(false);
+  const { data: session } = authClient.useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role;
 
   return (
     <header className="site-header">
@@ -35,6 +44,7 @@ export function SiteHeader() {
             </Link>
           ))}
           <a href="mailto:info@modecodersclub.com.ng?subject=School%20partnership">For schools</a>
+          {session && <Link href={dashboardHref(role)}>Dashboard</Link>}
         </nav>
         <div className="header-actions">
           <Link className="button button-small button-dark" href="/contact">
@@ -70,6 +80,11 @@ export function SiteHeader() {
           <a href="mailto:info@modecodersclub.com.ng?subject=School%20partnership" onClick={closeMenu}>
             For schools
           </a>
+          {session && (
+            <Link href={dashboardHref(role)} onClick={closeMenu}>
+              Dashboard
+            </Link>
+          )}
         </nav>
       )}
     </header>
