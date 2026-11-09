@@ -34,6 +34,9 @@ model User {
   enrollments        Enrollment[]       @relation("EnrolledUser")
   enrollmentsCreated Enrollment[]       @relation("EnrollmentCreator")
 
+  labSubmissions     LabSubmission[]
+  assessmentAttempts AssessmentAttempt[]
+
   @@map("user")
 }
 
@@ -189,9 +192,70 @@ model Lesson {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  progress LessonProgress[]
+  progress   LessonProgress[]
+  lab        Lab?
+  assessment Assessment?
 
   @@index([courseId, position])
+}
+
+// AI-assisted coding lab attached to a lesson (one per lesson). Hints are
+// generated on request and never stored — only the student's own code is
+// persisted here. See src/lib/anthropic.ts and the /api/labs/* routes.
+model Lab {
+  id           String   @id @default(cuid())
+  lessonId     String   @unique
+  lesson       Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  instructions String   @db.VarChar(4000)
+  starterHtml  String   @db.VarChar(4000) @default("")
+  starterCss   String   @db.VarChar(4000) @default("")
+  starterJs    String   @db.VarChar(4000) @default("")
+  hintsEnabled Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  submissions LabSubmission[]
+}
+
+model LabSubmission {
+  id        String   @id @default(cuid())
+  labId     String
+  lab       Lab      @relation(fields: [labId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  html      String   @db.VarChar(4000) @default("")
+  css       String   @db.VarChar(4000) @default("")
+  js        String   @db.VarChar(4000) @default("")
+  updatedAt DateTime @updatedAt
+
+  @@unique([labId, userId])
+}
+
+// AI-assisted multiple-choice assessment attached to a lesson (one per
+// lesson). `questions` shape: { question, options: string[4], correctIndex }[].
+model Assessment {
+  id         String   @id @default(cuid())
+  lessonId   String   @unique
+  lesson     Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questions  Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  attempts AssessmentAttempt[]
+}
+
+model AssessmentAttempt {
+  id           String     @id @default(cuid())
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers      Json
+  score        Int
+  total        Int
+  submittedAt  DateTime   @updatedAt
+
+  @@unique([assessmentId, userId])
 }
 
 model CourseInstructor {

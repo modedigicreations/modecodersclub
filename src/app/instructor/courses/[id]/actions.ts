@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { requireAdmin, requireInstructorAccess } from "@/lib/session";
 import prisma from "@/lib/prisma";
 
@@ -143,4 +144,97 @@ export async function unassignInstructor(courseId: string, assignmentId: string)
   await requireAdmin();
   await prisma.courseInstructor.delete({ where: { id: assignmentId, courseId } });
   revalidatePath(`/instructor/courses/${courseId}`);
+}
+
+// --- Coding lab ---
+
+export async function upsertLab(courseId: string, lessonId: string, formData: FormData) {
+  await requireInstructorAccess(courseId);
+
+  try {
+    const instructions = String(formData.get("instructions") ?? "").trim();
+    const starterHtml = String(formData.get("starterHtml") ?? "");
+    const starterCss = String(formData.get("starterCss") ?? "");
+    const starterJs = String(formData.get("starterJs") ?? "");
+    const hintsEnabled = formData.get("hintsEnabled") === "on";
+    if (!instructions) throw new Error("Enter instructions for the lab.");
+
+    await prisma.lab.upsert({
+      where: { lessonId },
+      create: { lessonId, instructions, starterHtml, starterCss, starterJs, hintsEnabled },
+      update: { instructions, starterHtml, starterCss, starterJs, hintsEnabled },
+    });
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    errorRedirect(`/instructor/courses/${courseId}/lessons/${lessonId}`, error);
+  }
+
+  revalidatePath(`/instructor/courses/${courseId}/lessons/${lessonId}`);
+  revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
+  redirect(`/instructor/courses/${courseId}/lessons/${lessonId}`);
+}
+
+export async function deleteLab(courseId: string, lessonId: string) {
+  await requireInstructorAccess(courseId);
+  await prisma.lab.deleteMany({ where: { lessonId } });
+  revalidatePath(`/instructor/courses/${courseId}/lessons/${lessonId}`);
+  revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
+}
+
+// --- Assessment ---
+
+type QuestionDraft = { question: string; options: string[]; correctIndex: number };
+
+function parseQuestions(raw: string): QuestionDraft[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Questions must be valid JSON.");
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("Add at least one question.");
+
+  return parsed.map((item, index) => {
+    const isValid =
+      typeof item === "object" && item !== null &&
+      typeof (item as { question?: unknown }).question === "string" &&
+      Array.isArray((item as { options?: unknown }).options) &&
+      (item as { options: unknown[] }).options.length === 4 &&
+      (item as { options: unknown[] }).options.every((option) => typeof option === "string") &&
+      Number.isInteger((item as { correctIndex?: unknown }).correctIndex) &&
+      (item as { correctIndex: number }).correctIndex >= 0 &&
+      (item as { correctIndex: number }).correctIndex <= 3;
+
+    if (!isValid) {
+      throw new Error(`Question ${index + 1} needs a question, 4 options, and a correctIndex from 0-3.`);
+    }
+    return item as QuestionDraft;
+  });
+}
+
+export async function upsertAssessment(courseId: string, lessonId: string, formData: FormData) {
+  await requireInstructorAccess(courseId);
+
+  try {
+    const questions = parseQuestions(String(formData.get("questions") ?? ""));
+    await prisma.assessment.upsert({
+      where: { lessonId },
+      create: { lessonId, questions: questions as unknown as Prisma.InputJsonValue },
+      update: { questions: questions as unknown as Prisma.InputJsonValue },
+    });
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    errorRedirect(`/instructor/courses/${courseId}/lessons/${lessonId}`, error);
+  }
+
+  revalidatePath(`/instructor/courses/${courseId}/lessons/${lessonId}`);
+  revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
+  redirect(`/instructor/courses/${courseId}/lessons/${lessonId}`);
+}
+
+export async function deleteAssessment(courseId: string, lessonId: string) {
+  await requireInstructorAccess(courseId);
+  await prisma.assessment.deleteMany({ where: { lessonId } });
+  revalidatePath(`/instructor/courses/${courseId}/lessons/${lessonId}`);
+  revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
 }

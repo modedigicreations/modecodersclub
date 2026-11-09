@@ -1843,6 +1843,13 @@ p {
   letter-spacing: -0.03em;
 }
 
+.admin-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
 .admin-table {
   width: 100%;
   border-collapse: collapse;
@@ -1912,6 +1919,29 @@ p {
 .admin-form textarea {
   min-height: 80px;
   resize: vertical;
+}
+
+.ai-generate-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: 640px;
+  margin-bottom: 14px;
+}
+
+.ai-generate-row input,
+.ai-generate-row select {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+}
+
+.ai-generate-row input {
+  flex: 1;
+  min-width: 180px;
 }
 
 .admin-actions {
