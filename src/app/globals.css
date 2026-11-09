@@ -54,7 +54,8 @@ a:focus-visible {
 }
 
 .site-header {
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 3;
   background: var(--paper);
   border-bottom: 1px solid rgba(32, 38, 48, 0.08);
