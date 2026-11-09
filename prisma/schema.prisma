@@ -30,6 +30,10 @@ model User {
   createdForumSessions ForumSession[] @relation("ForumSessionCreator")
   forumPosts          ForumPost[]
 
+  instructorCourses  CourseInstructor[]
+  enrollments        Enrollment[]       @relation("EnrolledUser")
+  enrollmentsCreated Enrollment[]       @relation("EnrollmentCreator")
+
   @@map("user")
 }
 
@@ -99,6 +103,10 @@ model Course {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  lessons     Lesson[]
+  instructors CourseInstructor[]
+  enrollments Enrollment[]
+
   @@index([order])
 }
 
@@ -165,4 +173,62 @@ model ForumPost {
 
   @@index([sessionId, createdAt])
   @@index([authorId, createdAt])
+}
+
+// Lessons, instructor assignment, enrollment, and progress — the
+// student-facing "take classes in your dashboard" feature.
+model Lesson {
+  id          String   @id @default(cuid())
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String   @db.VarChar(160)
+  content     String   @db.VarChar(8000)
+  videoUrl    String?  @db.VarChar(500)
+  position    Int      @default(0)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  progress LessonProgress[]
+
+  @@index([courseId, position])
+}
+
+model CourseInstructor {
+  id         String   @id @default(cuid())
+  courseId   String
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@unique([courseId, userId])
+  @@index([userId])
+}
+
+model Enrollment {
+  id           String   @id @default(cuid())
+  courseId     String
+  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User     @relation("EnrolledUser", fields: [userId], references: [id], onDelete: Cascade)
+  enrolledById String
+  enrolledBy   User     @relation("EnrollmentCreator", fields: [enrolledById], references: [id])
+  enrolledAt   DateTime @default(now())
+
+  lessonProgress LessonProgress[]
+
+  @@unique([courseId, userId])
+  @@index([userId])
+}
+
+model LessonProgress {
+  id           String     @id @default(cuid())
+  enrollmentId String
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lessonId     String
+  lesson       Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  completedAt  DateTime   @default(now())
+
+  @@unique([enrollmentId, lessonId])
 }
