@@ -23,3 +23,15 @@ export async function markLessonComplete(courseId: string, lessonId: string) {
   revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
   revalidatePath("/dashboard");
 }
+
+// Called directly from the client lab editor (not bound to a form) for
+// silent autosave — no redirect/revalidate, since there's no page
+// transition to make visible.
+export async function saveLabSubmission(labId: string, html: string, css: string, js: string) {
+  const session = await requireUser();
+  await prisma.labSubmission.upsert({
+    where: { labId_userId: { labId, userId: session.user.id } },
+    create: { labId, userId: session.user.id, html, css, js },
+    update: { html, css, js },
+  });
+}

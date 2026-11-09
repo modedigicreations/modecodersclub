@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { toEmbedUrl } from "@/lib/video-embed";
+import { LabEditor } from "@/components/lab-editor";
 import { markLessonComplete } from "../../../../actions";
 
 export const instant = false;
@@ -20,14 +21,21 @@ export default async function DashboardLessonPage({
   });
   if (!enrollment) redirect("/dashboard");
 
-  const [lesson, allLessons, progress] = await Promise.all([
+  const [lesson, allLessons, progress, lab] = await Promise.all([
     prisma.lesson.findUnique({ where: { id: lessonId, courseId: id, isPublished: true } }),
     prisma.lesson.findMany({ where: { courseId: id, isPublished: true }, orderBy: { position: "asc" } }),
     prisma.lessonProgress.findUnique({
       where: { enrollmentId_lessonId: { enrollmentId: enrollment.id, lessonId } },
     }),
+    prisma.lab.findUnique({ where: { lessonId } }),
   ]);
   if (!lesson) notFound();
+
+  const submission = lab
+    ? await prisma.labSubmission.findUnique({
+        where: { labId_userId: { labId: lab.id, userId: session.user.id } },
+      })
+    : null;
 
   const index = allLessons.findIndex((l) => l.id === lessonId);
   const previousLesson = index > 0 ? allLessons[index - 1] : null;
@@ -48,6 +56,23 @@ export default async function DashboardLessonPage({
         )}
 
         <p className="lesson-content">{lesson.content}</p>
+
+        {lab && (
+          <>
+            <h2 style={{ fontSize: 18, marginBottom: 12 }}>Coding lab</h2>
+            <p className="lesson-content" style={{ marginBottom: 16 }}>{lab.instructions}</p>
+            <LabEditor
+              lessonId={lessonId}
+              labId={lab.id}
+              hintsEnabled={lab.hintsEnabled}
+              initial={{
+                html: submission?.html ?? lab.starterHtml,
+                css: submission?.css ?? lab.starterCss,
+                js: submission?.js ?? lab.starterJs,
+              }}
+            />
+          </>
+        )}
 
         <form action={markLessonComplete.bind(null, id, lessonId)}>
           <button className="button button-primary" type="submit" disabled={isComplete}>
