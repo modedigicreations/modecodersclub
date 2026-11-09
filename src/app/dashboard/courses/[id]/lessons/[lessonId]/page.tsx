@@ -4,7 +4,9 @@ import { requireUser } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { toEmbedUrl } from "@/lib/video-embed";
 import { LabEditor } from "@/components/lab-editor";
-import { markLessonComplete } from "../../../../actions";
+import { markLessonComplete, submitAssessment } from "../../../../actions";
+
+type AssessmentQuestion = { question: string; options: string[]; correctIndex: number };
 
 export const instant = false;
 
@@ -21,13 +23,14 @@ export default async function DashboardLessonPage({
   });
   if (!enrollment) redirect("/dashboard");
 
-  const [lesson, allLessons, progress, lab] = await Promise.all([
+  const [lesson, allLessons, progress, lab, assessment] = await Promise.all([
     prisma.lesson.findUnique({ where: { id: lessonId, courseId: id, isPublished: true } }),
     prisma.lesson.findMany({ where: { courseId: id, isPublished: true }, orderBy: { position: "asc" } }),
     prisma.lessonProgress.findUnique({
       where: { enrollmentId_lessonId: { enrollmentId: enrollment.id, lessonId } },
     }),
     prisma.lab.findUnique({ where: { lessonId } }),
+    prisma.assessment.findUnique({ where: { lessonId } }),
   ]);
   if (!lesson) notFound();
 
@@ -36,6 +39,13 @@ export default async function DashboardLessonPage({
         where: { labId_userId: { labId: lab.id, userId: session.user.id } },
       })
     : null;
+  const attempt = assessment
+    ? await prisma.assessmentAttempt.findUnique({
+        where: { assessmentId_userId: { assessmentId: assessment.id, userId: session.user.id } },
+      })
+    : null;
+  const questions = (assessment?.questions as unknown as AssessmentQuestion[] | undefined) ?? [];
+  const previousAnswers = (attempt?.answers as unknown as number[] | undefined) ?? [];
 
   const index = allLessons.findIndex((l) => l.id === lessonId);
   const previousLesson = index > 0 ? allLessons[index - 1] : null;
@@ -71,6 +81,47 @@ export default async function DashboardLessonPage({
                 js: submission?.js ?? lab.starterJs,
               }}
             />
+          </>
+        )}
+
+        {assessment && (
+          <>
+            <h2 style={{ fontSize: 18, marginBottom: 12 }}>Assessment</h2>
+            {attempt && (
+              <p className="lesson-content" style={{ marginBottom: 16 }}>
+                Your score: {attempt.score} / {attempt.total}. Answer again to update it.
+              </p>
+            )}
+            <form className="admin-form" action={submitAssessment.bind(null, id, lessonId)} style={{ maxWidth: 640 }}>
+              {questions.map((question, index) => (
+                <div key={index}>
+                  <label htmlFor={`q${index}`} style={{ textTransform: "none", fontSize: 14, color: "var(--ink)" }}>
+                    {index + 1}. {question.question}
+                  </label>
+                  <div id={`q${index}`} style={{ display: "grid", gap: 6, marginTop: 6 }}>
+                    {question.options.map((option, optionIndex) => (
+                      <label
+                        key={optionIndex}
+                        style={{ display: "flex", alignItems: "center", gap: 8, textTransform: "none", fontSize: 14, color: "var(--ink)", marginBottom: 0 }}
+                      >
+                        <input
+                          type="radio"
+                          name={`q${index}`}
+                          value={optionIndex}
+                          defaultChecked={previousAnswers[index] === optionIndex}
+                          style={{ width: "auto" }}
+                          required
+                        />
+                        {option}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              <button className="button button-primary" type="submit" style={{ justifySelf: "start" }}>
+                {attempt ? "Resubmit" : "Submit answers"}
+              </button>
+            </form>
           </>
         )}
 
