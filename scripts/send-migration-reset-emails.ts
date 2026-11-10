@@ -1,27 +1,63 @@
 // Sends a real password-reset email to every migrated WordPress learner
 // (any "learner" with no credential Account row yet, i.e. never set a
-// password here). Run once, after migrate-wordpress.ts, via Railway's
-// Console tab: npx tsx scripts/send-migration-reset-emails.ts
+// password here). Run after migrate-wordpress.ts.
 //
-// Batched with a short delay between sends to stay well under StackMail's
-// throughput — 558 emails isn't huge, but there's no reason to hammer it.
+// Resumable: progress is persisted to migration-data/reset-email-log.json
+// (gitignored, same as the rest of the migration data) so re-running this
+// script — e.g. after StackMail's daily sending limit resets — only retries
+// recipients who haven't successfully received an email yet, rather than
+// re-sending to everyone.
+//
+// If a send fails with what looks like a daily-limit rejection, the script
+// stops immediately instead of burning through the rest of the batch on
+// guaranteed failures — re-run it again once the limit resets.
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { auth } from "../src/lib/auth";
 import prisma from "../src/lib/prisma";
 
 const DELAY_BETWEEN_SENDS_MS = 1500;
+const LOG_PATH = path.join(__dirname, "migration-data", "reset-email-log.json");
+
+type SendLog = Record<string, "sent" | "failed">;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function readLog(): SendLog {
+  try {
+    return JSON.parse(fs.readFileSync(LOG_PATH, "utf8")) as SendLog;
+  } catch {
+    return {};
+  }
+}
+
+function writeLog(log: SendLog) {
+  fs.mkdirSync(path.dirname(LOG_PATH), { recursive: true });
+  fs.writeFileSync(LOG_PATH, JSON.stringify(log, null, 2));
+}
+
+function looksLikeDailyLimit(message: string) {
+  return /daily limit|try again later|550/i.test(message);
+}
+
 async function main() {
+  const log = readLog();
+
   const learners = await prisma.user.findMany({
     where: { role: "learner" },
     include: { accounts: { where: { providerId: "credential" } } },
   });
 
-  const recipients = learners.filter((user) => user.accounts.length === 0);
-  console.log(`Sending password-reset emails to ${recipients.length} migrated learners...`);
+  const recipients = learners.filter(
+    (user) => user.accounts.length === 0 && log[user.email] !== "sent",
+  );
+
+  const alreadySent = Object.values(log).filter((status) => status === "sent").length;
+  console.log(
+    `${alreadySent} already sent in a previous run. Sending to ${recipients.length} remaining learners...`,
+  );
 
   let sent = 0;
   let failed = 0;
@@ -32,14 +68,26 @@ async function main() {
         body: { email: user.email, redirectTo: "/reset-password" },
       });
       sent++;
+      log[user.email] = "sent";
+      writeLog(log);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       failed++;
-      console.error(`Failed for ${user.email}:`, error instanceof Error ? error.message : error);
+      log[user.email] = "failed";
+      writeLog(log);
+      console.error(`Failed for ${user.email}: ${message}`);
+
+      if (looksLikeDailyLimit(message)) {
+        console.error(
+          "This looks like a daily sending-limit rejection — stopping here instead of burning through the rest of the batch. Re-run this script once the limit resets; already-sent recipients will be skipped.",
+        );
+        break;
+      }
     }
     await sleep(DELAY_BETWEEN_SENDS_MS);
   }
 
-  console.log(`Done. Sent: ${sent}, Failed: ${failed}.`);
+  console.log(`Done. Sent: ${sent}, Failed: ${failed}. Total sent across all runs: ${alreadySent + sent}.`);
 }
 
 main()
