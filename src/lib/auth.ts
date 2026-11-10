@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { enterpriseSsoPlugin } from "@/lib/enterprise-sso-plugin";
 import prisma from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 
@@ -70,6 +71,7 @@ function buildAuth() {
         },
       },
     },
+    plugins: [enterpriseSsoPlugin()],
   });
 }
 
