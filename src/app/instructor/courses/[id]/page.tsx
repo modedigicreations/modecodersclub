@@ -47,6 +47,12 @@ export default async function InstructorCourseWorkspacePage({
   return (
     <main className="section catalog-section">
       <div className="container">
+      <p>
+        <Link className="text-link text-link-back" href={isAdmin ? "/admin/courses" : "/instructor"}>
+          <span aria-hidden="true">←</span> Back to {isAdmin ? "courses" : "dashboard"}
+        </Link>
+      </p>
+
       <div className="admin-header">
         <h1>{course.name}</h1>
       </div>

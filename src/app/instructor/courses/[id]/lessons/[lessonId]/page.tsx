@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireInstructorAccess } from "@/lib/session";
 import prisma from "@/lib/prisma";
@@ -29,6 +30,12 @@ export default async function EditLessonPage({
   return (
     <main className="section catalog-section">
       <div className="container">
+        <p>
+          <Link className="text-link text-link-back" href={`/instructor/courses/${id}`}>
+            <span aria-hidden="true">←</span> Back to course
+          </Link>
+        </p>
+
         <div className="admin-header">
           <h1>Edit {lesson.title}</h1>
         </div>

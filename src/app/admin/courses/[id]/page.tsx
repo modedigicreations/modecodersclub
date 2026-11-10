@@ -18,6 +18,11 @@ export default async function EditCoursePage({
 
   return (
     <div>
+      <p>
+        <Link href="/admin/courses" className="text-link text-link-back">
+          <span aria-hidden="true">←</span> Back to courses
+        </Link>
+      </p>
       <div className="admin-header">
         <h1>Edit {course.name}</h1>
         <Link href={`/instructor/courses/${course.id}`} className="text-link">
