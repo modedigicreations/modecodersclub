@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import prisma from "@/lib/prisma";
+import { sendEmail } from "@/lib/email";
 
 // No explicit return type here on purpose: betterAuth() is generic over its
 // options, and TypeScript only infers the custom additionalFields (role)
@@ -21,6 +22,19 @@ function buildAuth() {
       enabled: true,
       minPasswordLength: 12,
       maxPasswordLength: 128,
+      sendResetPassword: async ({ user, url }) => {
+        await sendEmail({
+          to: user.email,
+          subject: "Set your Mode Coders Club password",
+          text: `Hi ${user.name},\n\nSet your password here: ${url}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
+          html: `
+            <p>Hi ${user.name},</p>
+            <p>Click below to set your password for Mode Coders Club:</p>
+            <p><a href="${url}">Set your password</a></p>
+            <p>This link expires in 1 hour. If you didn't request this, ignore this email.</p>
+          `,
+        });
+      },
     },
     user: {
       validateUserInfo: ({ user, source }) => {

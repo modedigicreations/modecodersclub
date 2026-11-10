@@ -50,6 +50,9 @@ export function LoginForm() {
             <label htmlFor="password">Password</label>
             <input id="password" name="password" type="password" autoComplete="current-password" required />
           </div>
+          <p className="auth-footer-note" style={{ marginTop: -8, marginBottom: 16, textAlign: "right" }}>
+            <a href="/forgot-password">Forgot password?</a>
+          </p>
           {errorMessage && <p className="auth-error">{errorMessage}</p>}
           <button className="button button-primary auth-submit" type="submit" disabled={pending}>
             {pending ? "Signing in…" : "Sign in"}
