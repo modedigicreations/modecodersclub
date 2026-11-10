@@ -43,7 +43,13 @@ export default async function AdminCoursesPage({
                   <span style={{ color: "var(--muted)", fontSize: 11 }}>/courses/{course.slug}</span>
                 </td>
                 <td>{course.category}</td>
-                <td>{course.price}</td>
+                <td>
+                  {course.price}
+                  <br />
+                  <span style={{ color: course.isFree ? "var(--muted)" : "var(--green-dark)", fontSize: 11, fontWeight: 700 }}>
+                    {course.isFree ? "Free" : "Requires subscription"}
+                  </span>
+                </td>
                 <td>{course.archivedAt ? "Archived" : "Active"}</td>
                 <td>
                   <div className="admin-actions">

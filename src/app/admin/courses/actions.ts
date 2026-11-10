@@ -18,6 +18,7 @@ function readCourseFields(formData: FormData) {
   const duration = String(formData.get("duration") ?? "").trim();
   const price = String(formData.get("price") ?? "").trim();
   const audience = String(formData.get("audience") ?? "").trim();
+  const isFree = formData.get("isFree") === "on";
   const outcomes = String(formData.get("outcomes") ?? "")
     .split("\n")
     .map((line) => line.trim())
@@ -36,7 +37,7 @@ function readCourseFields(formData: FormData) {
     throw new Error("Add at least one outcome (one per line).");
   }
 
-  return { slug, name, category, level, description, icon, color, duration, price, audience, outcomes };
+  return { slug, name, category, level, description, icon, color, duration, price, audience, isFree, outcomes };
 }
 
 function errorRedirect(basePath: string, error: unknown): never {

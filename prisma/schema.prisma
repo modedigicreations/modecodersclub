@@ -37,6 +37,11 @@ model User {
   labSubmissions     LabSubmission[]
   assessmentAttempts AssessmentAttempt[]
 
+  // Provisioned via the Modebills Enterprise SSO launcher — exempt from the
+  // individual-subscription gate in enrollStudent (their school already pays).
+  isEnterpriseSso Boolean        @default(false)
+  subscriptions   Subscription[]
+
   @@map("user")
 }
 
@@ -105,6 +110,11 @@ model Course {
   archivedAt  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // Admin-togglable gate: paid courses require an active Subscription (or
+  // isEnterpriseSso) to enroll into — see enrollStudent. `price` above stays
+  // display-only marketing text regardless of this flag.
+  isFree Boolean @default(true)
 
   lessons     Lesson[]
   instructors CourseInstructor[]
@@ -295,4 +305,21 @@ model LessonProgress {
   completedAt  DateTime   @default(now())
 
   @@unique([enrollmentId, lessonId])
+}
+
+// One row per payment, not a single mutable flag — keeps full history as a
+// subscription is renewed. hasActiveSubscription() (src/lib/subscriptions.ts)
+// checks for any row with status "active" and a future expiresAt.
+model Subscription {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status            String   @default("active") @db.VarChar(20) // "active" | "expired"
+  startedAt         DateTime @default(now())
+  expiresAt         DateTime
+  paystackReference String   @unique @db.VarChar(100)
+  amountKobo        Int
+  createdAt         DateTime @default(now())
+
+  @@index([userId, expiresAt])
 }

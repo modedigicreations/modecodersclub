@@ -10,6 +10,7 @@ type CourseDefaults = {
   price?: string;
   audience?: string;
   outcomes?: string[];
+  isFree?: boolean;
 };
 
 const COLORS = ["orange", "mint", "lavender", "blue", "pink", "teal"];
@@ -74,6 +75,18 @@ export function CourseForm({
           <label htmlFor="price">Price</label>
           <input id="price" name="price" defaultValue={defaults?.price} required />
         </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          id="isFree"
+          name="isFree"
+          type="checkbox"
+          defaultChecked={defaults?.isFree ?? true}
+          style={{ width: "auto" }}
+        />
+        <label htmlFor="isFree" style={{ marginBottom: 0, textTransform: "none", fontSize: 13, color: "var(--ink)" }}>
+          Free (uncheck to require an active subscription to enroll)
+        </label>
       </div>
       <div>
         <label htmlFor="audience">Who it&rsquo;s for</label>
