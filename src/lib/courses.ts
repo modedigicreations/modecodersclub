@@ -113,6 +113,47 @@ export const courses = [
       "A small AI-powered project you build and demo",
     ],
   },
+  // These two have real recorded video lessons (migrated from WordPress) and
+  // real completed enrollments, unlike the other free resources below — so
+  // they're real courses here, just free ones (isFree defaults to true).
+  {
+    slug: "microsoft-word",
+    name: "Microsoft Word",
+    category: "Digital Literacy",
+    level: "Build real office skills",
+    description:
+      "Practical, exam-style practice for core Microsoft Word skills: formatting, documents, and everyday office tasks.",
+    icon: "W",
+    color: "blue",
+    duration: "11 lessons, self-paced",
+    price: "Free",
+    audience: "Anyone who wants hands-on practice with everyday Microsoft Word tasks.",
+    outcomes: [
+      "Formatting documents cleanly and consistently",
+      "Working with templates, styles, and page layout",
+      "Everyday office tasks: tables, headers, mail merge basics",
+      "Exam-style practice questions to check real understanding",
+    ],
+  },
+  {
+    slug: "microsoft-excel",
+    name: "Microsoft Excel",
+    category: "Digital Literacy",
+    level: "Build real office skills",
+    description:
+      "Practical, exam-style practice for core Microsoft Excel skills: spreadsheets, formulas, and everyday office tasks.",
+    icon: "X",
+    color: "lavender",
+    duration: "11 lessons, self-paced",
+    price: "Free",
+    audience: "Anyone who wants hands-on practice with everyday Microsoft Excel tasks.",
+    outcomes: [
+      "Building and formatting spreadsheets",
+      "Core formulas and functions used in real office work",
+      "Charts, sorting, and filtering data",
+      "Exam-style practice questions to check real understanding",
+    ],
+  },
 ] as const;
 
 export type Course = (typeof courses)[number];
@@ -144,26 +185,6 @@ export const freeResources = [
     icon: "✦",
     color: "orange",
     time: "1 hour",
-  },
-  {
-    slug: "microsoft-word",
-    name: "Microsoft Word",
-    category: "Digital Literacy",
-    description:
-      "Practical, exam-style practice for core Microsoft Word skills: formatting, documents, and everyday office tasks.",
-    icon: "W",
-    color: "blue",
-    time: "Self-paced",
-  },
-  {
-    slug: "microsoft-excel",
-    name: "Microsoft Excel",
-    category: "Digital Literacy",
-    description:
-      "Practical, exam-style practice for core Microsoft Excel skills: spreadsheets, formulas, and everyday office tasks.",
-    icon: "X",
-    color: "lavender",
-    time: "Self-paced",
   },
 ] as const;
 

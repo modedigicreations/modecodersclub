@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# raw WordPress migration exports (real user emails, never commit)
+/scripts/migration-data/
