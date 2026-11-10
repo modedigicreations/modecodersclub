@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { requireAdmin, requireInstructorAccess } from "@/lib/session";
 import prisma from "@/lib/prisma";
+import { hasActiveSubscription } from "@/lib/subscriptions";
 
 function isRedirectError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "digest" in error &&
@@ -88,6 +89,17 @@ export async function enrollStudent(courseId: string, formData: FormData) {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) throw new Error(`No account found for ${email}. They need to register first.`);
     if (user.role === "admin") throw new Error("Admin accounts can't be enrolled as a student.");
+
+    const course = await prisma.course.findUnique({ where: { id: courseId }, select: { isFree: true } });
+    if (!course) throw new Error("Course not found.");
+    if (!course.isFree && !user.isEnterpriseSso) {
+      const subscribed = await hasActiveSubscription(user.id);
+      if (!subscribed) {
+        throw new Error(
+          `${user.name} doesn't have an active subscription yet — this course requires one. Ask them to subscribe from their dashboard first.`,
+        );
+      }
+    }
 
     const existing = await prisma.enrollment.findUnique({
       where: { courseId_userId: { courseId, userId: user.id } },

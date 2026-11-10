@@ -5,8 +5,45 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import prisma from "@/lib/prisma";
+import { SUBSCRIPTION_AMOUNT_KOBO, initializeTransaction } from "@/lib/paystack";
 
 type AssessmentQuestion = { question: string; options: string[]; correctIndex: number };
+
+function isRedirectError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "digest" in error &&
+    typeof (error as { digest?: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT");
+}
+
+// Starts a Paystack checkout for the sitewide Premium subscription.
+// Subscription.active rows are only ever created by the webhook
+// (src/app/api/paystack/webhook/route.ts) — this action just gets the
+// learner to Paystack's hosted checkout page.
+export async function subscribe() {
+  const session = await requireUser();
+
+  const baseUrl = process.env.BETTER_AUTH_URL;
+  if (!baseUrl) redirect("/dashboard?error=" + encodeURIComponent("Subscriptions aren't configured yet."));
+
+  let authorizationUrl: string;
+  try {
+    const reference = `mcc-sub-${session.user.id}-${Date.now()}`;
+    const { authorization_url } = await initializeTransaction({
+      email: session.user.email,
+      amountKobo: SUBSCRIPTION_AMOUNT_KOBO,
+      reference,
+      callbackUrl: new URL("/dashboard/subscribe/callback", baseUrl).toString(),
+      metadata: { userId: session.user.id },
+    });
+    authorizationUrl = authorization_url;
+  } catch (error) {
+    if (isRedirectError(error)) throw error;
+    const message = error instanceof Error ? error.message : "Could not start checkout.";
+    redirect(`/dashboard?error=${encodeURIComponent(message)}`);
+  }
+
+  redirect(authorizationUrl);
+}
 
 export async function markLessonComplete(courseId: string, lessonId: string) {
   const session = await requireUser();

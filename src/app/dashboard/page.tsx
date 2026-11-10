@@ -1,11 +1,22 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import prisma from "@/lib/prisma";
+import { hasActiveSubscription } from "@/lib/subscriptions";
+import { subscribe } from "./actions";
 
 export const instant = false;
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
   const session = await requireUser();
+  const { error } = await searchParams;
+  const isEnterpriseSso = (session.user as { isEnterpriseSso?: boolean }).isEnterpriseSso ?? false;
+
+  const showSubscribePrompt =
+    session.user.role === "learner" && !isEnterpriseSso && !(await hasActiveSubscription(session.user.id));
 
   const enrollments = await prisma.enrollment.findMany({
     where: { userId: session.user.id },
@@ -36,6 +47,26 @@ export default async function DashboardPage() {
 
       <section className="section catalog-section">
         <div className="container">
+          {error && <p className="auth-error">{error}</p>}
+
+          {showSubscribePrompt && (
+            <div className="admin-form" style={{ maxWidth: 640, marginBottom: 28 }}>
+              <div>
+                <h2 style={{ fontSize: 16, marginBottom: 6 }}>Unlock paid courses</h2>
+                <p className="lesson-content" style={{ marginBottom: 0 }}>
+                  Some of our courses require a Premium subscription (₦5,000 every 6 months). Subscribe
+                  now, then let us know which course you&rsquo;d like to start and we&rsquo;ll get you
+                  enrolled.
+                </p>
+              </div>
+              <form action={subscribe}>
+                <button className="button button-primary" type="submit" style={{ justifySelf: "start" }}>
+                  Subscribe — ₦5,000 every 6 months
+                </button>
+              </form>
+            </div>
+          )}
+
           {enrollments.length === 0 ? (
             <p className="admin-empty">
               You&rsquo;re not enrolled in anything yet. Ask us about a course at{" "}

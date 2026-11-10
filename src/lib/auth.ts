@@ -46,6 +46,14 @@ function buildAuth() {
           defaultValue: "learner",
           input: true,
         },
+        // Set only by the Enterprise SSO endpoint (direct adapter write),
+        // never by a regular signup/update call.
+        isEnterpriseSso: {
+          type: "boolean",
+          required: false,
+          defaultValue: false,
+          input: false,
+        },
       },
     },
   });
