@@ -1846,12 +1846,18 @@ p {
   display: grid;
   grid-template-columns: 220px 1fr;
   min-height: 70vh;
+  /* .admin-shell is a flex item of <body> (root layout is flex flex-col),
+     and flex/grid items default to min-width: auto — refusing to shrink
+     below their content's intrinsic width. Without this, the whole admin
+     area forces the page wider than the viewport on any narrow screen. */
+  min-width: 0;
 }
 
 .admin-sidebar {
   padding: 32px 20px;
   border-right: 1px solid var(--line);
   background: var(--soft);
+  min-width: 0;
 }
 
 .admin-sidebar-title {
@@ -1885,6 +1891,7 @@ p {
 
 .admin-main {
   padding: 32px 36px 60px;
+  min-width: 0;
 }
 
 .admin-header {
@@ -2032,6 +2039,50 @@ p {
   color: var(--muted);
   font-size: 13px;
   text-align: center;
+}
+
+.admin-user-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.admin-user-filters input,
+.admin-user-filters select {
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.admin-user-filters input[type="search"] {
+  flex: 1;
+  min-width: 200px;
+}
+
+.admin-user-count {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-pagination-status {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 @media (max-width: 760px) {
