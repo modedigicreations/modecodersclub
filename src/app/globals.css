@@ -2346,3 +2346,18 @@ p {
 .admin-form label.admin-checkbox input {
   width: auto;
 }
+
+/* Course progress */
+.progress-bar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.progress-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--green-dark);
+}

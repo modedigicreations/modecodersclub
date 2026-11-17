@@ -77,7 +77,13 @@ export default async function AdminCertificatesPage({
             {certificates.map((certificate) => (
               <tr key={certificate.id}>
                 <td>{certificate.recipientName}</td>
-                <td>{certificate.courseName}</td>
+                <td>
+                  {certificate.courseName}
+                  <br />
+                  <span style={{ color: "var(--muted)", fontSize: 11 }}>
+                    {certificate.issuedById ? "Issued by an admin" : "Automatic (course completed)"}
+                  </span>
+                </td>
                 <td style={{ fontFamily: "var(--font-geist-mono), monospace", fontSize: 11 }}>
                   {certificate.certificateNumber}
                 </td>

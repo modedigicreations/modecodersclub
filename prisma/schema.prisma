@@ -26,6 +26,7 @@ model User {
   accounts Account[]
 
   issuedCertificates  Certificate[]  @relation("CertificateIssuer")
+  certificates        Certificate[]  @relation("CertificateRecipient")
   revokedCertificates Certificate[]  @relation("CertificateRevoker")
   createdForumSessions ForumSession[] @relation("ForumSessionCreator")
   forumPosts          ForumPost[]
@@ -126,6 +127,7 @@ model Course {
   instructors    CourseInstructor[]
   enrollments    Enrollment[]
   generationJobs CourseGenerationJob[]
+  certificates   Certificate[]
 
   @@index([order])
 }
@@ -147,7 +149,9 @@ model FreeResource {
   @@index([order])
 }
 
-// Admin-issued completion certificates (see src/lib/certificate-verification.ts).
+// Completion certificates (see src/lib/certificate-verification.ts).
+// Admin-issued ones have issuedById; automatic ones (src/lib/course-completion.ts)
+// have issuedById null and are linked to the learner (userId) and course (courseId).
 model Certificate {
   id                String            @id @default(cuid())
   certificateNumber String            @unique @db.VarChar(40)
@@ -155,14 +159,19 @@ model Certificate {
   courseName        String            @db.VarChar(120)
   status            CertificateStatus @default(ACTIVE)
   issuedAt          DateTime          @default(now())
-  issuedById        String
-  issuedBy          User              @relation("CertificateIssuer", fields: [issuedById], references: [id])
+  issuedById        String?
+  issuedBy          User?             @relation("CertificateIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
+  userId            String?
+  user              User?             @relation("CertificateRecipient", fields: [userId], references: [id], onDelete: SetNull)
+  courseId          String?
+  course            Course?           @relation(fields: [courseId], references: [id], onDelete: SetNull)
   revokedAt         DateTime?
   revokedById       String?
   revokedBy         User?             @relation("CertificateRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
   revocationReason  String?           @db.VarChar(1000)
 
   @@index([issuedAt])
+  @@index([userId, courseId])
 }
 
 // Weekly community discussion sessions ("Community" nav).

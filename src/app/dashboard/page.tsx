@@ -28,12 +28,22 @@ export default async function DashboardPage({
   });
 
   const courseIds = enrollments.map((e) => e.courseId);
-  const publishedCounts = await prisma.lesson.groupBy({
-    by: ["courseId"],
-    where: { courseId: { in: courseIds }, isPublished: true },
-    _count: { _all: true },
-  });
-  const publishedByCourseId = new Map(publishedCounts.map((row) => [row.courseId, row._count._all]));
+  const [publishedLessons, certificates] = await Promise.all([
+    prisma.lesson.findMany({
+      where: { courseId: { in: courseIds }, isPublished: true },
+      select: { id: true, courseId: true },
+    }),
+    prisma.certificate.findMany({
+      where: { userId: session.user.id, status: "ACTIVE", courseId: { in: courseIds } },
+      select: { courseId: true },
+    }),
+  ]);
+  const publishedByCourseId = new Map<string, Set<string>>();
+  for (const l of publishedLessons) {
+    if (!publishedByCourseId.has(l.courseId)) publishedByCourseId.set(l.courseId, new Set());
+    publishedByCourseId.get(l.courseId)!.add(l.id);
+  }
+  const certifiedCourseIds = new Set(certificates.map((c) => c.courseId));
 
   return (
     <main>
@@ -75,14 +85,17 @@ export default async function DashboardPage({
           ) : (
             <div className="session-grid">
               {enrollments.map((enrollment) => {
-                const total = publishedByCourseId.get(enrollment.courseId) ?? 0;
-                const completed = enrollment.lessonProgress.length;
+                const published = publishedByCourseId.get(enrollment.courseId) ?? new Set<string>();
+                const total = published.size;
+                // Only lessons that are still published count (an unpublished lesson's old progress doesn't).
+                const completed = enrollment.lessonProgress.filter((p) => published.has(p.lessonId)).length;
                 const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
 
                 return (
                   <Link className="session-card" href={`/dashboard/courses/${enrollment.courseId}`} key={enrollment.id}>
                     <div className="session-meta-row">
                       <span>{enrollment.course.category}</span>
+                      {certifiedCourseIds.has(enrollment.courseId) && <span>🎓 Certificate earned</span>}
                     </div>
                     <h3>{enrollment.course.name}</h3>
                     <p>

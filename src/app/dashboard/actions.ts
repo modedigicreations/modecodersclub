@@ -6,6 +6,14 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { SUBSCRIPTION_AMOUNT_KOBO, initializeTransaction } from "@/lib/paystack";
+import { issueCertificateIfComplete } from "@/lib/course-completion";
+
+/** Certificate check after progress changes; never blocks the learner's action. */
+async function checkCertificate(userId: string, courseId: string) {
+  await issueCertificateIfComplete(userId, courseId).catch((err) =>
+    console.error("[certificates] automatic issue failed:", err instanceof Error ? err.message : err),
+  );
+}
 
 type AssessmentQuestion = { question: string; options: string[]; correctIndex: number };
 
@@ -66,6 +74,7 @@ export async function markLessonComplete(courseId: string, lessonId: string) {
     update: {},
     create: { enrollmentId: enrollment.id, lessonId },
   });
+  await checkCertificate(session.user.id, courseId);
 
   revalidatePath(`/dashboard/courses/${courseId}`);
   revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
@@ -137,6 +146,8 @@ export async function submitAssessment(courseId: string, lessonId: string, formD
     },
     update: { answers: answers as unknown as Prisma.InputJsonValue, score, total: questions.length },
   });
+  await checkCertificate(session.user.id, courseId);
+  revalidatePath(`/dashboard/courses/${courseId}`);
 
   revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
   redirect(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
