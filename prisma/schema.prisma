@@ -42,6 +42,8 @@ model User {
   isEnterpriseSso Boolean        @default(false)
   subscriptions   Subscription[]
 
+  courseGenerationJobs CourseGenerationJob[]
+
   @@map("user")
 }
 
@@ -116,9 +118,14 @@ model Course {
   // display-only marketing text regardless of this flag.
   isFree Boolean @default(true)
 
-  lessons     Lesson[]
-  instructors CourseInstructor[]
-  enrollments Enrollment[]
+  // Draft courses (e.g. created by the AI course generator) are hidden from the
+  // public catalogue and can't take enrollments until an admin publishes them.
+  isDraft Boolean @default(false)
+
+  lessons        Lesson[]
+  instructors    CourseInstructor[]
+  enrollments    Enrollment[]
+  generationJobs CourseGenerationJob[]
 
   @@index([order])
 }
@@ -322,4 +329,37 @@ model Subscription {
   createdAt         DateTime @default(now())
 
   @@index([userId, expiresAt])
+}
+
+// One AI course-generation run (the A-EduNet pipeline in src/lib/course-generator).
+// Admin-only. The course it creates is a draft unless autoPublish was ticked.
+model CourseGenerationJob {
+  id           String    @id @default(cuid())
+  createdById  String
+  createdBy    User      @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  topic        String    @db.VarChar(300)
+  audience     String    @db.VarChar(300)
+  level        String    @db.VarChar(40)
+  lessonTarget Int
+  includeLabs  Boolean   @default(true)
+  autoPublish  Boolean   @default(false)
+  isFree       Boolean   @default(false)
+  price        String    @default("") @db.VarChar(80)
+  status       String    @default("queued") @db.VarChar(20) // queued | running | succeeded | failed
+  stage        String    @default("") @db.VarChar(200)
+  lessonsTotal Int       @default(0)
+  lessonsDone  Int       @default(0)
+  courseId     String?
+  course       Course?   @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  error        String?   @db.VarChar(500)
+  model        String    @default("") @db.VarChar(60)
+  inputTokens  Int       @default(0)
+  outputTokens Int       @default(0)
+  createdAt    DateTime  @default(now())
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@index([createdById, createdAt])
+  @@index([status])
 }

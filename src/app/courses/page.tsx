@@ -14,7 +14,7 @@ export const instant = false;
 
 export default async function CoursesPage() {
   const [courses, freeResources] = await Promise.all([
-    prisma.course.findMany({ where: { archivedAt: null }, orderBy: { order: "asc" } }),
+    prisma.course.findMany({ where: { archivedAt: null, isDraft: false }, orderBy: { order: "asc" } }),
     prisma.freeResource.findMany({ where: { archivedAt: null }, orderBy: { order: "asc" } }),
   ]);
 

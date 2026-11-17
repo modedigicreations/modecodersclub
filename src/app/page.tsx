@@ -27,7 +27,7 @@ const clubValues = [
 
 export default async function Home() {
   const featuredCourses = await prisma.course.findMany({
-    where: { archivedAt: null },
+    where: { archivedAt: null, isDraft: false },
     orderBy: { order: "asc" },
     take: 3,
   });

@@ -14,7 +14,7 @@ export const instant = false;
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const course = await prisma.course.findUnique({ where: { slug } });
+  const course = await prisma.course.findFirst({ where: { slug, archivedAt: null, isDraft: false } });
   if (!course) return {};
 
   return {
@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function CourseDetailPage({ params }: PageProps) {
   const { slug } = await params;
-  const course = await prisma.course.findFirst({ where: { slug, archivedAt: null } });
+  const course = await prisma.course.findFirst({ where: { slug, archivedAt: null, isDraft: false } });
   if (!course) notFound();
 
   return (

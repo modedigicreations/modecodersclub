@@ -55,7 +55,15 @@ export default async function InstructorCourseWorkspacePage({
 
       <div className="admin-header">
         <h1>{course.name}</h1>
+        <a className="text-link" href={`/api/courses/${id}/handbook`}>
+          Handbook (PDF) <span aria-hidden="true">↓</span>
+        </a>
       </div>
+      {course.isDraft && (
+        <p className="auth-error" style={{ background: "#fff7e6", color: "#7a4b00" }}>
+          Draft: hidden from the catalogue and closed to enrolments until an admin publishes it from Admin → AI course generator.
+        </p>
+      )}
 
       {error && <p className="auth-error">{error}</p>}
 

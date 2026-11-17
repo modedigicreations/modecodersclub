@@ -16,7 +16,9 @@
     "db:seed": "tsx scripts/seed-courses.ts",
     "db:seed:admin": "tsx scripts/seed-admin.ts",
     "db:reset-admin-password": "tsx scripts/reset-admin-password.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
@@ -30,7 +32,8 @@
     "pdf-lib": "^1.17.1",
     "qrcode": "^1.5.4",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",

@@ -17,3 +17,10 @@ export function getAnthropic(): Anthropic {
 
 export const HINT_MODEL = "claude-haiku-5-5";
 export const GENERATE_MODEL = "claude-sonnet-5-5";
+
+// AI course generator (A-EduNet, src/lib/course-generator). Switch to
+// "claude-sonnet-5-5" to roughly halve the cost per generated course.
+export const COURSE_GENERATE_MODEL = "claude-opus-5-5";
+// USD per million tokens for COURSE_GENERATE_MODEL, used only to show an
+// approximate cost per generated course in the admin.
+export const COURSE_GENERATE_PRICE_PER_MTOK = { input: 4, output: 20 };

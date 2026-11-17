@@ -50,7 +50,7 @@ export default async function AdminCoursesPage({
                     {course.isFree ? "Free" : "Requires subscription"}
                   </span>
                 </td>
-                <td>{course.archivedAt ? "Archived" : "Active"}</td>
+                <td>{course.archivedAt ? "Archived" : course.isDraft ? "Draft (hidden)" : "Active"}</td>
                 <td>
                   <div className="admin-actions">
                     <Link href={`/admin/courses/${course.id}`}>Edit</Link>

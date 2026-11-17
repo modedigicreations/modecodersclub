@@ -90,8 +90,9 @@ export async function enrollStudent(courseId: string, formData: FormData) {
     if (!user) throw new Error(`No account found for ${email}. They need to register first.`);
     if (user.role === "admin") throw new Error("Admin accounts can't be enrolled as a student.");
 
-    const course = await prisma.course.findUnique({ where: { id: courseId }, select: { isFree: true } });
+    const course = await prisma.course.findUnique({ where: { id: courseId }, select: { isFree: true, isDraft: true } });
     if (!course) throw new Error("Course not found.");
+    if (course.isDraft) throw new Error("This course is still a draft. Publish it from Admin → Courses before enrolling learners.");
     if (!course.isFree && !user.isEnterpriseSso) {
       const subscribed = await hasActiveSubscription(user.id);
       if (!subscribed) {
