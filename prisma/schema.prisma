@@ -45,6 +45,8 @@ model User {
 
   courseGenerationJobs CourseGenerationJob[]
   courseReviews        CourseReview[]
+  learningDays         LearningDay[]
+  badges               UserBadge[]
 
   @@map("user")
 }
@@ -401,4 +403,24 @@ model CourseReview {
 
   @@unique([courseId, userId])
   @@index([courseId, hiddenAt])
+}
+
+// One row per learner per day they did something (finished a lesson, took a
+// quiz, checked a lab), in LEARNING_TIMEZONE. Streaks are worked out from these.
+model LearningDay {
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day    DateTime @db.Date
+
+  @@id([userId, day])
+}
+
+// Badges a learner has earned; the badge list itself is in src/lib/achievements.ts.
+model UserBadge {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge     String   @db.VarChar(40)
+  awardedAt DateTime @default(now())
+
+  @@id([userId, badge])
 }

@@ -10,6 +10,7 @@ import { csvCell, getCourseLearnerProgress, progressCsv } from "@/lib/learner-pr
 import { getCourseRating, publicName, saveReview } from "@/lib/reviews";
 import { formatChecks, gradeLab, parseChecks } from "@/lib/lab-checks";
 import { recordLabCheck } from "@/lib/lab-submissions";
+import { computeStreaks, getAchievements, localDay, recordLearning } from "@/lib/achievements";
 
 if (/railway|rlwy|amazonaws|supabase|neon\.tech/i.test(process.env.DATABASE_URL ?? "")) {
   throw new Error("DATABASE_URL looks like a hosted database; refusing to run tests that write data.");
@@ -314,5 +315,40 @@ describe("F6 auto-graded labs", () => {
 
     const noChecks = await prisma.lab.create({ data: { lessonId: `${P}-l1`, instructions: "Free play" } });
     assert.equal(await recordLabCheck(noChecks.id, ids.learner, { html: "", css: "", js: "" }), null, "labs without checks aren't graded");
+  });
+});
+
+describe("F7 streaks and badges", () => {
+  test("streak maths", () => {
+    assert.deepEqual(computeStreaks([], "2026-11-18"), { current: 0, longest: 0 });
+    const days = ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04", "2026-11-10", "2026-11-16", "2026-11-17", "2026-11-17"];
+    assert.deepEqual(computeStreaks(days, "2026-11-17"), { current: 2, longest: 4 });
+    assert.deepEqual(computeStreaks(days, "2026-11-18"), { current: 2, longest: 4 }, "yesterday still counts");
+    assert.deepEqual(computeStreaks(days, "2026-11-19"), { current: 0, longest: 4 }, "a missed day breaks it");
+    assert.deepEqual(computeStreaks(["2026-02-28", "2026-03-01"], "2026-03-01").current, 2, "across month ends");
+    assert.equal(localDay(new Date("2026-11-17T23:30:00Z"), "Africa/Lagos"), "2026-11-18", "Lagos is UTC+1");
+  });
+
+  test("activity builds a streak and awards badges once", async () => {
+    // The F1 learner finished lessons, passed the quiz 2/2 and passed a lab (F6); its certificate was revoked.
+    const start = new Date("2026-11-10T09:00:00Z");
+    const first = await recordLearning(ids.learner, start);
+    assert.deepEqual(first.sort(), ["first-lesson", "lab-pass", "quiz-ace", "quiz-pass"]);
+    assert.deepEqual(await recordLearning(ids.learner, start), [], "same day: nothing new");
+
+    await recordLearning(ids.learner, new Date("2026-11-11T09:00:00Z"));
+    const third = await recordLearning(ids.learner, new Date("2026-11-12T22:30:00Z")); // 23:30 in Lagos
+    assert.deepEqual(third, ["streak-3"]);
+
+    const later = await getAchievements(ids.learner, new Date("2026-11-13T12:00:00Z"));
+    assert.equal(later.current, 3);
+    assert.equal(later.activeToday, false);
+    assert.equal(later.badges.filter((b) => b.awardedAt).length, 5);
+    assert.equal(later.badges.find((b) => b.key === "course-complete")!.awardedAt, null, "revoked certificate doesn't count");
+
+    const gone = await getAchievements(ids.learner, new Date("2026-11-20T12:00:00Z"));
+    assert.equal(gone.current, 0);
+    assert.equal(gone.longest, 3);
+    assert.ok(gone.badges.find((b) => b.key === "streak-3")!.awardedAt, "badges are kept");
   });
 });

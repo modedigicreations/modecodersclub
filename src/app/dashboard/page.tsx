@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { hasActiveSubscription } from "@/lib/subscriptions";
+import { getAchievements } from "@/lib/achievements";
 import { subscribe } from "./actions";
 
 export const instant = false;
@@ -28,7 +29,7 @@ export default async function DashboardPage({
   });
 
   const courseIds = enrollments.map((e) => e.courseId);
-  const [publishedLessons, certificates] = await Promise.all([
+  const [publishedLessons, certificates, achievements] = await Promise.all([
     prisma.lesson.findMany({
       where: { courseId: { in: courseIds }, isPublished: true },
       select: { id: true, courseId: true },
@@ -37,7 +38,9 @@ export default async function DashboardPage({
       where: { userId: session.user.id, status: "ACTIVE", courseId: { in: courseIds } },
       select: { courseId: true },
     }),
+    getAchievements(session.user.id),
   ]);
+  const earnedCount = achievements.badges.filter((b) => b.awardedAt).length;
   const publishedByCourseId = new Map<string, Set<string>>();
   for (const l of publishedLessons) {
     if (!publishedByCourseId.has(l.courseId)) publishedByCourseId.set(l.courseId, new Set());
@@ -63,6 +66,42 @@ export default async function DashboardPage({
       <section className="section catalog-section">
         <div className="container">
           {error && <p className="auth-error">{error}</p>}
+
+          {session.user.role === "learner" && (
+            <div className="achievements" aria-label="Your streak and badges">
+              <div className="streak-card">
+                <p className="streak-number">
+                  <span aria-hidden="true">🔥</span> {achievements.current}
+                </p>
+                <p>
+                  <strong>{achievements.current === 1 ? "day" : "days"} in a row</strong>
+                  <br />
+                  <span>
+                    {achievements.current === 0
+                      ? "Finish a lesson, quiz or lab today to start a streak."
+                      : achievements.activeToday
+                        ? "You've learned today. See you tomorrow!"
+                        : "Learn something today to keep it going."}
+                    {achievements.longest > achievements.current && ` Best: ${achievements.longest} days.`}
+                  </span>
+                </p>
+              </div>
+              <div>
+                <h2 style={{ fontSize: 16, marginBottom: 10 }}>
+                  Badges <span style={{ color: "var(--muted)", fontWeight: 400 }}>{earnedCount} of {achievements.badges.length}</span>
+                </h2>
+                <ul className="badge-grid">
+                  {achievements.badges.map((b) => (
+                    <li key={b.key} className={b.awardedAt ? "earned" : "locked"} title={b.description}>
+                      <span className="badge-icon" aria-hidden="true">{b.icon}</span>
+                      <strong>{b.name}</strong>
+                      <span>{b.awardedAt ? "Earned" : b.description}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
 
           {showSubscribePrompt && (
             <div className="admin-form" style={{ maxWidth: 640, marginBottom: 28 }}>

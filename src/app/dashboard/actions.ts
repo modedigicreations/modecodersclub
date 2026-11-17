@@ -9,11 +9,20 @@ import { SUBSCRIPTION_AMOUNT_KOBO, initializeTransaction } from "@/lib/paystack"
 import { issueCertificateIfComplete } from "@/lib/course-completion";
 import type { CheckResult } from "@/lib/lab-checks";
 import { recordLabCheck } from "@/lib/lab-submissions";
+import { recordLearning } from "@/lib/achievements";
 
 /** Certificate check after progress changes; never blocks the learner's action. */
 async function checkCertificate(userId: string, courseId: string) {
   await issueCertificateIfComplete(userId, courseId).catch((err) =>
     console.error("[certificates] automatic issue failed:", err instanceof Error ? err.message : err),
+  );
+  await logLearning(userId);
+}
+
+/** Streak day and badges; never blocks the learner's action. */
+async function logLearning(userId: string) {
+  await recordLearning(userId).catch((err) =>
+    console.error("[achievements] update failed:", err instanceof Error ? err.message : err),
   );
 }
 
@@ -133,7 +142,9 @@ export async function checkLabWork(
     css: clipCode(css),
     js: clipCode(js),
   });
-  return outcome ? { ok: true, ...outcome } : { ok: false };
+  if (!outcome) return { ok: false };
+  await logLearning(session.user.id);
+  return { ok: true, ...outcome };
 }
 
 // Scores server-side from the stored questions — never trusts a
