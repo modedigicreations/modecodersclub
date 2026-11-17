@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { EnrolPanel } from "./enrol-panel";
 import prisma from "@/lib/prisma";
 
 type PageProps = {
@@ -23,8 +25,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function CourseDetailPage({ params }: PageProps) {
+export default async function CourseDetailPage({
+  params,
+  searchParams,
+}: PageProps & { searchParams: Promise<{ error?: string }> }) {
   const { slug } = await params;
+  const { error } = await searchParams;
   const course = await prisma.course.findFirst({ where: { slug, archivedAt: null, isDraft: false } });
   if (!course) notFound();
 
@@ -73,15 +79,13 @@ export default async function CourseDetailPage({ params }: PageProps) {
             ))}
           </ul>
 
-          <div className="course-detail-cta">
-            <p>
-              Ready to start, or still have questions? We&rsquo;re happy to talk
-              you through what the {course.name} path involves.
-            </p>
-            <Link className="button button-primary" href="/contact">
-              Ask about this course <span aria-hidden="true">↗</span>
-            </Link>
-          </div>
+          {error && <p className="auth-error" style={{ marginTop: 24 }}>{error}</p>}
+          <Suspense fallback={<div className="course-detail-cta"><p>Loading enrolment options…</p></div>}>
+            <EnrolPanel courseId={course.id} isFree={course.isFree} courseName={course.name} />
+          </Suspense>
+          <p style={{ marginTop: 16, color: "var(--muted)" }}>
+            Still have questions? <Link className="text-link" href="/contact">Ask about this course</Link>.
+          </p>
 
           <p style={{ marginTop: 40 }}>
             <Link className="text-link text-link-back" href="/courses">

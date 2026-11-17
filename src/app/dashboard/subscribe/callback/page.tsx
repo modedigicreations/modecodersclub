@@ -51,8 +51,7 @@ export default async function SubscribeCallbackPage({
           <>
             <h1 style={{ fontSize: "clamp(26px, 4vw, 36px)" }}>You&rsquo;re subscribed!</h1>
             <p className="lesson-content">
-              Your Premium subscription is active. Let us know which course you&rsquo;d like to start and
-              we&rsquo;ll get you enrolled.
+              Your Premium subscription is active. Pick a course from the catalogue and press Enrol to start.
             </p>
           </>
         ) : (

@@ -4,6 +4,7 @@ import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import prisma from "@/lib/prisma";
 import { computeProgress, issueCertificateIfComplete } from "@/lib/course-completion";
+import { checkEnrolment, enrol } from "@/lib/enrolment";
 
 if (/railway|rlwy|amazonaws|supabase|neon\.tech/i.test(process.env.DATABASE_URL ?? "")) {
   throw new Error("DATABASE_URL looks like a hosted database; refusing to run tests that write data.");
@@ -38,8 +39,18 @@ export async function seedCourse() {
 
 export async function cleanup() {
   await prisma.certificate.deleteMany({ where: { OR: [{ userId: ids.learner }, { courseId: ids.course }] } });
-  await prisma.course.deleteMany({ where: { id: ids.course } });
-  await prisma.user.deleteMany({ where: { id: { in: [ids.learner, ids.admin] } } });
+  await prisma.subscription.deleteMany({ where: { userId: { startsWith: P } } });
+  await prisma.course.deleteMany({ where: { id: { startsWith: P } } });
+  await prisma.user.deleteMany({ where: { id: { startsWith: P } } });
+}
+
+async function paidCourse(id: string, extra: { isDraft?: boolean; archivedAt?: Date } = {}) {
+  return prisma.course.create({
+    data: {
+      id, slug: id, name: id, category: "T", level: "L", description: "D", icon: "x", color: "blue",
+      duration: "d", price: "p", audience: "a", outcomes: ["o"], isFree: false, ...extra,
+    },
+  });
 }
 
 before(async () => {
@@ -94,3 +105,32 @@ describe("F1 automatic certificates", () => {
     assert.equal(await prisma.certificate.count({ where: { userId: ids.learner, courseId: ids.course } }), 1);
   });
 });
+
+describe("F2 self-service enrolment", () => {
+  test("free/paid/draft/archived/admin/school rules, and enrolling twice is harmless", async () => {
+    const learner = `${P}-enrol-learner`;
+    const school = `${P}-enrol-school`;
+    await prisma.user.create({ data: { id: learner, name: "Enrol Learner", email: `${learner}@example.com` } });
+    await prisma.user.create({ data: { id: school, name: "School Learner", email: `${school}@example.com`, isEnterpriseSso: true } });
+    const paid = await paidCourse(`${P}-paid`);
+    const draft = await paidCourse(`${P}-draft`, { isDraft: true });
+    const archived = await paidCourse(`${P}-archived`, { archivedAt: new Date() });
+
+    assert.deepEqual(await checkEnrolment(learner, ids.course), { ok: true }, "free course is open");
+    assert.equal((await checkEnrolment(learner, paid.id) as { reason: string }).reason, "needs_subscription");
+    assert.equal((await checkEnrolment(school, paid.id)).ok, true, "school (SSO) learners don't need a subscription");
+    assert.equal((await checkEnrolment(learner, draft.id) as { reason: string }).reason, "not_open");
+    assert.equal((await checkEnrolment(learner, archived.id) as { reason: string }).reason, "not_open");
+    assert.equal((await checkEnrolment(ids.admin, ids.course) as { reason: string }).reason, "admin");
+
+    await prisma.subscription.create({
+      data: { userId: learner, paystackReference: `mcc-sub-${learner}`, amountKobo: 500000, expiresAt: new Date(Date.now() + 86_400_000) },
+    });
+    const first = await enrol(learner, paid.id, learner);
+    assert.equal(first.ok && first.created, true, "subscribed learner can enrol in a paid course");
+    const again = await enrol(learner, paid.id, learner);
+    assert.equal(again.ok && again.created, false);
+    assert.equal(await prisma.enrollment.count({ where: { userId: learner, courseId: paid.id } }), 1);
+  });
+});
+
