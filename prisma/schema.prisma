@@ -46,6 +46,7 @@ model User {
   courseGenerationJobs CourseGenerationJob[]
   courseReviews        CourseReview[]
   learningDays         LearningDay[]
+  blogPosts            BlogPost[]
   badges               UserBadge[]
 
   @@map("user")
@@ -423,4 +424,24 @@ model UserBadge {
   awardedAt DateTime @default(now())
 
   @@id([userId, badge])
+}
+
+// Blog posts written in the admin TipTap editor. content is TipTap JSON,
+// rendered on the server through an allowlist (src/lib/blog-render.tsx).
+// A post is public when publishedAt is set.
+model BlogPost {
+  id              String    @id @default(cuid())
+  slug            String    @unique
+  title           String    @db.VarChar(160)
+  excerpt         String    @default("") @db.VarChar(300)
+  content         Json
+  coverImageUrl   String?   @db.VarChar(1000)
+  tags            String[]  @default([])
+  authorId        String?
+  author          User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  publishedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([publishedAt])
 }
