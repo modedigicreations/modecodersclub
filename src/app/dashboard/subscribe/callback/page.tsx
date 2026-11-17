@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
-import prisma from "@/lib/prisma";
-import { SUBSCRIPTION_DURATION_DAYS, verifyTransaction } from "@/lib/paystack";
+import { verifyTransaction } from "@/lib/paystack";
+import { grantSubscription, subscriptionPaymentProblem } from "@/lib/subscriptions";
 
 export const instant = false;
 
@@ -20,24 +20,22 @@ export default async function SubscribeCallbackPage({
     try {
       const result = await verifyTransaction(reference);
       if (result.status === "success") {
-        // Defensive write alongside the webhook (src/app/api/paystack/webhook):
-        // idempotent on paystackReference, so whichever path lands first wins
-        // and the other just no-ops — this just means the learner doesn't have
-        // to wait on webhook delivery to see a correct confirmation here.
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + SUBSCRIPTION_DURATION_DAYS);
-        await prisma.subscription.upsert({
-          where: { paystackReference: reference },
-          create: {
-            userId: session.user.id,
-            paystackReference: reference,
-            amountKobo: result.amount,
-            expiresAt,
-            status: "active",
-          },
-          update: {},
-        });
-        success = true;
+        // Defensive write alongside the webhook (idempotent on the reference).
+        // Only this learner's own subscription checkout counts: never another
+        // person's payment, or another Mode app's charge on the same Paystack account.
+        const tx = {
+          reference: result.reference,
+          amountKobo: result.amount,
+          currency: result.currency,
+          metadataUserId: result.metadata?.userId ? String(result.metadata.userId) : undefined,
+        };
+        const problem = subscriptionPaymentProblem(tx, session.user.id);
+        if (problem) {
+          message = `We couldn't use that payment for your subscription (${problem}). If you were charged, contact us at info@modecodersclub.com.ng.`;
+        } else {
+          await grantSubscription(session.user.id, tx);
+          success = true;
+        }
       } else {
         message = `Payment ${result.status}. If you were charged, contact us at info@modecodersclub.com.ng.`;
       }

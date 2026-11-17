@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/session";
 import { notFound } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { updateUser } from "../actions";
@@ -11,6 +12,9 @@ export default async function EditUserPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  // Every admin page checks itself: the layout's check alone doesn't stop this
+  // page rendering (layouts and pages render in parallel), which leaked admin data.
+  await requireAdmin();
   const { id } = await params;
   const { error } = await searchParams;
   const user = await prisma.user.findUnique({ where: { id } });

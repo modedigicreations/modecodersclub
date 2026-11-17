@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
-import { SUBSCRIPTION_DURATION_DAYS, verifyWebhookSignature } from "@/lib/paystack";
+import { verifyWebhookSignature } from "@/lib/paystack";
+import { grantSubscription, subscriptionPaymentProblem } from "@/lib/subscriptions";
 
 // Paystack's recommended pattern: the webhook is the authoritative write
 // path (the browser callback at /dashboard/subscribe/callback is only a
@@ -15,41 +16,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
   }
 
-  const event = JSON.parse(rawBody) as {
-    event: string;
-    data: {
-      reference: string;
-      amount: number;
-      status: string;
-      metadata?: { userId?: string };
-    };
+  let event: {
+    event?: string;
+    data?: { reference?: string; amount?: number; currency?: string; status?: string; metadata?: { userId?: string } };
   };
+  try {
+    event = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
+  }
 
-  if (event.event !== "charge.success" || event.data.status !== "success") {
+  if (event.event !== "charge.success" || event.data?.status !== "success") {
     return NextResponse.json({ received: true });
   }
 
-  const userId = event.data.metadata?.userId;
-  if (!userId) {
-    return NextResponse.json({ error: "Missing userId in metadata." }, { status: 400 });
+  const tx = {
+    reference: String(event.data.reference ?? ""),
+    amountKobo: Number(event.data.amount ?? 0),
+    currency: String(event.data.currency ?? ""),
+    metadataUserId: event.data.metadata?.userId ? String(event.data.metadata.userId) : undefined,
+  };
+  // The Paystack account may be shared with other Mode apps: acknowledge
+  // (200) charges that aren't ours so Paystack stops retrying them.
+  const problem = subscriptionPaymentProblem(tx);
+  if (problem) {
+    if (tx.reference.startsWith("mcc-sub-")) console.warn(`[paystack] ignored ${tx.reference}: ${problem}`);
+    return NextResponse.json({ received: true, ignored: problem });
   }
 
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + SUBSCRIPTION_DURATION_DAYS);
+  const user = await prisma.user.findUnique({ where: { id: tx.metadataUserId! }, select: { id: true } });
+  if (!user) {
+    console.warn(`[paystack] ${tx.reference}: learner ${tx.metadataUserId} not found`);
+    return NextResponse.json({ received: true, ignored: "unknown learner" });
+  }
 
-  // Idempotent: Paystack may redeliver the same webhook. paystackReference
-  // is unique, so a retry just no-ops instead of creating a duplicate.
-  await prisma.subscription.upsert({
-    where: { paystackReference: event.data.reference },
-    create: {
-      userId,
-      paystackReference: event.data.reference,
-      amountKobo: event.data.amount,
-      expiresAt,
-      status: "active",
-    },
-    update: {},
-  });
-
+  await grantSubscription(user.id, tx);
   return NextResponse.json({ received: true });
 }

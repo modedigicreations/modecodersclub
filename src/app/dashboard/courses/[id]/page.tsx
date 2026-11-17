@@ -30,6 +30,13 @@ export default async function DashboardCoursePage({ params }: { params: Promise<
           <p className="eyebrow"><span /> {course.category}</p>
           <h1 style={{ fontSize: "clamp(32px, 4.4vw, 48px)" }}>{course.name}</h1>
           <p>{course.description}</p>
+          {lessons.length > 0 && (
+            <p>
+              <a href={`/api/courses/${id}/handbook`} className="text-link">
+                Download the course handbook (PDF) <span aria-hidden="true">↓</span>
+              </a>
+            </p>
+          )}
         </div>
       </section>
 

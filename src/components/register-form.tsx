@@ -21,7 +21,10 @@ export function RegisterForm() {
     const role = formData.get("role") === "instructor" ? "instructor" : "learner";
 
     try {
-      const result = await authClient.signUp.email({ name, email, password, role });
+      // `role` is not a user-editable field any more; the server's sign-up hook
+      // (src/lib/auth.ts) reads this request value and allows only
+      // "learner" or "instructor".
+      const result = await authClient.signUp.email({ name, email, password, ...({ role } as Record<string, string>) });
       if (result.error) {
         setErrorMessage(result.error.message ?? "Could not create your account. Please try again.");
         return;

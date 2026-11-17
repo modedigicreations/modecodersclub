@@ -34,3 +34,22 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## AI course generator (A-EduNet)
+
+Admins open **Admin → AI course generator**, describe a course (topic, audience, level, number of lessons) and press
+**Generate course**. Based on AutoMode AI's A-EduNet design, it runs in phases:
+
+1. **Curriculum** – Claude plans the modules and lessons.
+2. **Lessons** – each lesson's text, a 5-question quiz and (where it fits) an HTML/CSS/JavaScript lab are written in parallel.
+3. **Packaging** – everything is saved in one go as a **draft course**: hidden from the catalogue and closed to enrolments
+   until an admin reviews it and presses **Publish**. "Publish automatically" is off unless ticked on the form.
+
+Every course has a **PDF handbook** at `/api/courses/<id>/handbook` (admins and the course's instructors get every lesson;
+enrolled learners get published lessons).
+
+- Needs `ANTHROPIC_API_KEY`. Model: `COURSE_GENERATE_MODEL` in `src/lib/anthropic.ts` (`claude-opus-5-5`; switch to
+  `claude-sonnet-5-5` to roughly halve the cost). The admin page shows an approximate cost per run.
+- `COURSE_GENERATE_DAILY_LIMIT` (default 5) caps runs per admin per 24 hours; one run at a time per admin.
+- Runs in the background on the server; a run interrupted by a restart or deploy is marked failed after 15 minutes.
+- Tests: `npm test` (uses a fake Claude and a **throwaway** `DATABASE_URL`; it writes and deletes rows).

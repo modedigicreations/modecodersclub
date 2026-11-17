@@ -6,6 +6,7 @@ import type { Prisma } from "@prisma/client";
 import { requireAdmin, requireInstructorAccess } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { hasActiveSubscription } from "@/lib/subscriptions";
+import { toEmbedUrl } from "@/lib/video-embed";
 
 function isRedirectError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "digest" in error &&
@@ -18,6 +19,24 @@ function errorRedirect(basePath: string, error: unknown): never {
   redirect(`${basePath}?error=${encodeURIComponent(message)}`);
 }
 
+/** Throws unless `lessonId` belongs to `courseId` (access to one course must not reach another's lessons). */
+async function assertLessonInCourse(courseId: string, lessonId: string) {
+  const lesson = await prisma.lesson.findUnique({ where: { id: lessonId }, select: { courseId: true } });
+  if (!lesson || lesson.courseId !== courseId) throw new Error("Lesson not found in this course.");
+}
+
+const MAX_LESSON_CONTENT = 8000; // Lesson.content is VarChar(8000)
+const MAX_LAB_FIELD = 4000; // Lab columns are VarChar(4000)
+
+function readVideoUrl(formData: FormData): string | null {
+  const videoUrl = String(formData.get("videoUrl") ?? "").trim();
+  if (!videoUrl) return null;
+  if (videoUrl.length > 500 || !toEmbedUrl(videoUrl)) {
+    throw new Error("Video must be a YouTube or Vimeo link.");
+  }
+  return videoUrl;
+}
+
 // --- Lessons ---
 
 export async function createLesson(courseId: string, formData: FormData) {
@@ -26,13 +45,14 @@ export async function createLesson(courseId: string, formData: FormData) {
   try {
     const title = String(formData.get("title") ?? "").trim();
     const content = String(formData.get("content") ?? "").trim();
-    const videoUrl = String(formData.get("videoUrl") ?? "").trim();
     if (!title || title.length > 160) throw new Error("Enter a title (up to 160 characters).");
     if (!content) throw new Error("Enter the lesson content.");
+    if (content.length > MAX_LESSON_CONTENT) throw new Error(`Lesson content can be up to ${MAX_LESSON_CONTENT} characters.`);
+    const videoUrl = readVideoUrl(formData);
 
     const maxPosition = await prisma.lesson.aggregate({ where: { courseId }, _max: { position: true } });
     await prisma.lesson.create({
-      data: { courseId, title, content, videoUrl: videoUrl || null, position: (maxPosition._max.position ?? -1) + 1 },
+      data: { courseId, title, content, videoUrl, position: (maxPosition._max.position ?? -1) + 1 },
     });
   } catch (error) {
     if (isRedirectError(error)) throw error;
@@ -49,17 +69,18 @@ export async function updateLesson(courseId: string, lessonId: string, formData:
   try {
     const title = String(formData.get("title") ?? "").trim();
     const content = String(formData.get("content") ?? "").trim();
-    const videoUrl = String(formData.get("videoUrl") ?? "").trim();
     const position = Number(formData.get("position"));
     const isPublished = formData.get("isPublished") === "on";
 
     if (!title || title.length > 160) throw new Error("Enter a title (up to 160 characters).");
     if (!content) throw new Error("Enter the lesson content.");
     if (!Number.isInteger(position)) throw new Error("Position must be a whole number.");
+    if (content.length > MAX_LESSON_CONTENT) throw new Error(`Lesson content can be up to ${MAX_LESSON_CONTENT} characters.`);
+    const videoUrl = readVideoUrl(formData);
 
     await prisma.lesson.update({
       where: { id: lessonId, courseId },
-      data: { title, content, videoUrl: videoUrl || null, position, isPublished },
+      data: { title, content, videoUrl, position, isPublished },
     });
   } catch (error) {
     if (isRedirectError(error)) throw error;
@@ -90,8 +111,9 @@ export async function enrollStudent(courseId: string, formData: FormData) {
     if (!user) throw new Error(`No account found for ${email}. They need to register first.`);
     if (user.role === "admin") throw new Error("Admin accounts can't be enrolled as a student.");
 
-    const course = await prisma.course.findUnique({ where: { id: courseId }, select: { isFree: true } });
+    const course = await prisma.course.findUnique({ where: { id: courseId }, select: { isFree: true, isDraft: true } });
     if (!course) throw new Error("Course not found.");
+    if (course.isDraft) throw new Error("This course is still a draft. Publish it from Admin → Courses before enrolling learners.");
     if (!course.isFree && !user.isEnterpriseSso) {
       const subscribed = await hasActiveSubscription(user.id);
       if (!subscribed) {
@@ -170,6 +192,10 @@ export async function upsertLab(courseId: string, lessonId: string, formData: Fo
     const starterJs = String(formData.get("starterJs") ?? "");
     const hintsEnabled = formData.get("hintsEnabled") === "on";
     if (!instructions) throw new Error("Enter instructions for the lab.");
+    if ([instructions, starterHtml, starterCss, starterJs].some((v) => v.length > MAX_LAB_FIELD)) {
+      throw new Error(`Each lab field can be up to ${MAX_LAB_FIELD} characters.`);
+    }
+    await assertLessonInCourse(courseId, lessonId);
 
     await prisma.lab.upsert({
       where: { lessonId },
@@ -188,7 +214,7 @@ export async function upsertLab(courseId: string, lessonId: string, formData: Fo
 
 export async function deleteLab(courseId: string, lessonId: string) {
   await requireInstructorAccess(courseId);
-  await prisma.lab.deleteMany({ where: { lessonId } });
+  await prisma.lab.deleteMany({ where: { lessonId, lesson: { courseId } } });
   revalidatePath(`/instructor/courses/${courseId}/lessons/${lessonId}`);
   revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
 }
@@ -229,6 +255,7 @@ export async function upsertAssessment(courseId: string, lessonId: string, formD
 
   try {
     const questions = parseQuestions(String(formData.get("questions") ?? ""));
+    await assertLessonInCourse(courseId, lessonId);
     await prisma.assessment.upsert({
       where: { lessonId },
       create: { lessonId, questions: questions as unknown as Prisma.InputJsonValue },
@@ -246,7 +273,7 @@ export async function upsertAssessment(courseId: string, lessonId: string, formD
 
 export async function deleteAssessment(courseId: string, lessonId: string) {
   await requireInstructorAccess(courseId);
-  await prisma.assessment.deleteMany({ where: { lessonId } });
+  await prisma.assessment.deleteMany({ where: { lessonId, lesson: { courseId } } });
   revalidatePath(`/instructor/courses/${courseId}/lessons/${lessonId}`);
   revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
 }

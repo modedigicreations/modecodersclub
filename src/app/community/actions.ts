@@ -21,6 +21,11 @@ export async function createPost(sessionId: string, formData: FormData) {
     }
     const forumSession = await prisma.forumSession.findUnique({ where: { id: sessionId } });
     if (!forumSession) throw new Error("This session no longer exists.");
+    // Slow down spam: at most 10 replies per 10 minutes per member.
+    const recent = await prisma.forumPost.count({
+      where: { authorId: session.user.id, createdAt: { gte: new Date(Date.now() - 10 * 60 * 1000) } },
+    });
+    if (recent >= 10) throw new Error("You're posting very quickly. Wait a few minutes and try again.");
 
     await prisma.forumPost.create({
       data: { sessionId, authorId: session.user.id, body },

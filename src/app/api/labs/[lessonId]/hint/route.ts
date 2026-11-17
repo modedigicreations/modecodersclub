@@ -17,8 +17,11 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (!session) return NextResponse.json({ error: "Sign-in required." }, { status: 401 });
 
   const { lessonId } = await params;
-  const lesson = await prisma.lesson.findUnique({ where: { id: lessonId }, select: { courseId: true, title: true } });
-  if (!lesson) return NextResponse.json({ error: "Lesson not found." }, { status: 404 });
+  const lesson = await prisma.lesson.findUnique({
+    where: { id: lessonId },
+    select: { courseId: true, title: true, isPublished: true },
+  });
+  if (!lesson || !lesson.isPublished) return NextResponse.json({ error: "Lesson not found." }, { status: 404 });
 
   const enrollment = await prisma.enrollment.findUnique({
     where: { courseId_userId: { courseId: lesson.courseId, userId: session.user.id } },

@@ -2322,3 +2322,27 @@ p {
   border-top: 1px solid var(--line);
   background: #fff;
 }
+
+/* AI course generator (admin) */
+.auth-success {
+  margin-bottom: 14px;
+  color: var(--green-dark);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.admin-form label.admin-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.admin-form label.admin-checkbox input {
+  width: auto;
+}
