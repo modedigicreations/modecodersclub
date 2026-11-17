@@ -10,6 +10,7 @@ import { csvCell, getCourseLearnerProgress, progressCsv } from "@/lib/learner-pr
 import { getCourseRating, publicName, saveReview } from "@/lib/reviews";
 import { formatChecks, gradeLab, parseChecks } from "@/lib/lab-checks";
 import { recordLabCheck } from "@/lib/lab-submissions";
+import { contentBlocks } from "@/lib/course-handbook";
 import { computeStreaks, getAchievements, localDay, recordLearning } from "@/lib/achievements";
 
 if (/railway|rlwy|amazonaws|supabase|neon\.tech/i.test(process.env.DATABASE_URL ?? "")) {
@@ -350,5 +351,15 @@ describe("F7 streaks and badges", () => {
     assert.equal(gone.current, 0);
     assert.equal(gone.longest, 3);
     assert.ok(gone.badges.find((b) => b.key === "streak-3")!.awardedAt, "badges are kept");
+  });
+});
+
+describe("F8 offline handbook", () => {
+  test("lesson text splits into prose and indented code, as in the PDF", () => {
+    assert.deepEqual(contentBlocks("Intro line\r\nmore\n    <h1>Hi</h1>\n\tconsole.log(1)\nAfter"), [
+      { code: false, text: "Intro line\nmore" },
+      { code: true, text: "<h1>Hi</h1>\nconsole.log(1)" },
+      { code: false, text: "After" },
+    ]);
   });
 });

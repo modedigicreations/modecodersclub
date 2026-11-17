@@ -56,9 +56,13 @@ export default async function DashboardCoursePage({
           <h1 style={{ fontSize: "clamp(32px, 4.4vw, 48px)" }}>{course.name}</h1>
           <p>{course.description}</p>
           {lessons.length > 0 && (
-            <p>
+            <p style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+              {/* Full page load, so the saved copy opens when offline. */}
+              <a href={`/dashboard/courses/${id}/handbook`} className="text-link">
+                Read the handbook (save it for offline) <span aria-hidden="true">→</span>
+              </a>
               <a href={`/api/courses/${id}/handbook`} className="text-link">
-                Download the course handbook (PDF) <span aria-hidden="true">↓</span>
+                Download PDF <span aria-hidden="true">↓</span>
               </a>
             </p>
           )}

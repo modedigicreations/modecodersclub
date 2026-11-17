@@ -2499,3 +2499,116 @@ p {
 .badge-grid .locked .badge-icon {
   filter: grayscale(1);
 }
+
+/* Course handbook (web / offline) */
+.handbook {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+  font-size: 17px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.handbook h1 {
+  font-size: clamp(28px, 7vw, 44px);
+  line-height: 1.15;
+  margin: 8px 0 12px;
+}
+.handbook h2 {
+  font-size: clamp(21px, 5vw, 26px);
+  margin: 0 0 10px;
+}
+.handbook h3 {
+  font-size: 17px;
+  margin: 14px 0 6px;
+}
+.handbook section,
+.handbook-contents,
+.handbook-lesson {
+  margin-top: 36px;
+}
+.handbook p + p {
+  margin-top: 10px;
+}
+.handbook ul,
+.handbook ol {
+  padding-left: 22px;
+}
+.handbook ul {
+  list-style: disc;
+}
+.handbook ol {
+  list-style: decimal;
+}
+.handbook ol[type="A"] {
+  list-style: upper-alpha;
+  margin: 4px 0 10px;
+}
+.handbook pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  overflow-x: auto;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.handbook-cover {
+  border-bottom: 1px solid var(--line, #e5e7eb);
+  padding-bottom: 24px;
+}
+.handbook-links {
+  font-size: 14px;
+  margin-top: 14px;
+}
+.handbook-links a,
+.handbook-top a {
+  color: var(--green-dark);
+  text-decoration: underline;
+}
+.handbook-lesson {
+  border-top: 1px solid var(--line, #e5e7eb);
+  padding-top: 24px;
+}
+.handbook-lesson-number {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--green-dark);
+}
+.handbook-box {
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 12px;
+  padding: 4px 16px 14px;
+  margin-top: 18px;
+  font-size: 16px;
+}
+.handbook-note,
+.handbook-offline-note {
+  color: var(--muted);
+  font-size: 14px;
+}
+.handbook-offline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 16px;
+  font-size: 15px;
+}
+.handbook-top {
+  font-size: 14px;
+  margin-top: 16px;
+}
+@media print {
+  .handbook-offline,
+  .handbook-links,
+  .handbook-top {
+    display: none;
+  }
+}
