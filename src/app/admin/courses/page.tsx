@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/session";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
 import { createCourse, deleteCourse, setCourseArchived } from "./actions";
@@ -8,6 +9,9 @@ export default async function AdminCoursesPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  // Every admin page checks itself: the layout's check alone doesn't stop this
+  // page rendering (layouts and pages render in parallel), which leaked admin data.
+  await requireAdmin();
   const { error } = await searchParams;
   const courses = await prisma.course.findMany({ orderBy: { order: "asc" } });
 

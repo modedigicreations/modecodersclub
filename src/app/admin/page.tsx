@@ -1,7 +1,11 @@
+import { requireAdmin } from "@/lib/session";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
 
 export default async function AdminDashboardPage() {
+  // Every admin page checks itself: the layout's check alone doesn't stop this
+  // page rendering (layouts and pages render in parallel), which leaked admin data.
+  await requireAdmin();
   const [courseCount, resourceCount, certificateCount, forumSessionCount, userCount] = await Promise.all([
     prisma.course.count({ where: { archivedAt: null } }),
     prisma.freeResource.count({ where: { archivedAt: null } }),

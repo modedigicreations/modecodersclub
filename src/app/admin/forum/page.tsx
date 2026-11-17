@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/session";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
 import { createForumSession, setPostHidden } from "./actions";
@@ -7,6 +8,9 @@ export default async function AdminForumPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  // Every admin page checks itself: the layout's check alone doesn't stop this
+  // page rendering (layouts and pages render in parallel), which leaked admin data.
+  await requireAdmin();
   const { error } = await searchParams;
   const [sessions, posts] = await Promise.all([
     prisma.forumSession.findMany({

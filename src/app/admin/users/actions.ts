@@ -64,7 +64,12 @@ export async function deleteUser(id: string) {
         throw new Error("At least one admin account must remain.");
       }
     }
-    await prisma.user.delete({ where: { id } });
+    // Enrollments record who enrolled each learner (no cascade on that link):
+    // hand them over to this admin so deleting a staff account doesn't fail.
+    await prisma.$transaction([
+      prisma.enrollment.updateMany({ where: { enrolledById: id }, data: { enrolledById: session.user.id } }),
+      prisma.user.delete({ where: { id } }),
+    ]);
   } catch (error) {
     if (isRedirectError(error)) throw error;
     const message = error instanceof Error ? error.message : "Could not delete the user.";

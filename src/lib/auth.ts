@@ -4,6 +4,10 @@ import { enterpriseSsoPlugin } from "@/lib/enterprise-sso-plugin";
 import prisma from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
 // No explicit return type here on purpose: betterAuth() is generic over its
 // options, and TypeScript only infers the custom additionalFields (role)
 // that the rest of the app relies on (session.user.role) when it can see
@@ -29,9 +33,9 @@ function buildAuth() {
           subject: "Set your Mode Coders Club password",
           text: `Hi ${user.name},\n\nSet your password here: ${url}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
           html: `
-            <p>Hi ${user.name},</p>
+            <p>Hi ${escapeHtml(user.name)},</p>
             <p>Click below to set your password for Mode Coders Club:</p>
-            <p><a href="${url}">Set your password</a></p>
+            <p><a href="${escapeHtml(url)}">Set your password</a></p>
             <p>This link expires in 1 hour. If you didn't request this, ignore this email.</p>
           `,
         });
@@ -55,11 +59,16 @@ function buildAuth() {
         }
       },
       additionalFields: {
+        // NOT user-editable. With `input: true`, Better Auth's own
+        // /api/auth/update-user endpoint let any signed-in learner set
+        // {"role":"admin"} on themselves. The learner/instructor choice at
+        // sign-up is applied by databaseHooks.user.create.before below;
+        // only admins change roles afterwards (Admin → Users).
         role: {
           type: "string",
           required: false,
           defaultValue: "learner",
-          input: true,
+          input: false,
         },
         // Set only by the Enterprise SSO endpoint (direct adapter write),
         // never by a regular signup/update call.
@@ -68,6 +77,28 @@ function buildAuth() {
           required: false,
           defaultValue: false,
           input: false,
+        },
+      },
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user, context) => {
+            // Self-registration may choose "instructor" (an instructor has no
+            // access to any course until an admin assigns one); everything
+            // else signs up as a learner. Admins are created by
+            // scripts/seed-admin.ts or promoted in Admin → Users.
+            if (context?.path === "/sign-up/email") {
+              const requested = (context.body as { role?: unknown } | undefined)?.role;
+              return { data: { ...user, role: requested === "instructor" ? "instructor" : "learner" } };
+            }
+          },
+        },
+        update: {
+          before: async (data, context) => {
+            // Defence in depth: no auth endpoint may change a role.
+            if (context && "role" in data) return false;
+          },
         },
       },
     },

@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/session";
 import { createCertificateVerificationToken } from "@/lib/certificate-verification";
 import prisma from "@/lib/prisma";
 import { issueCertificate, revokeCertificate } from "./actions";
@@ -7,6 +8,9 @@ export default async function AdminCertificatesPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  // Every admin page checks itself: the layout's check alone doesn't stop this
+  // page rendering (layouts and pages render in parallel), which leaked admin data.
+  await requireAdmin();
   const { error } = await searchParams;
   const [certificates, courses] = await Promise.all([
     prisma.certificate.findMany({ orderBy: { issuedAt: "desc" } }),

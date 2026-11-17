@@ -39,8 +39,14 @@ async function verifyEnterpriseSsoToken(
   secret: string,
 ): Promise<EnterpriseSsoPayload | null> {
   const parts = token.split(".");
-  if (parts.length !== 3) return null;
+  if (parts.length !== 3 || token.length > 4096) return null;
   const [encodedHeader, encodedPayload, encodedSignature] = parts;
+  try {
+    const header = JSON.parse(new TextDecoder().decode(base64UrlToBytes(encodedHeader)));
+    if (header?.alg !== "HS256") return null;
+  } catch {
+    return null;
+  }
 
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -66,7 +72,8 @@ async function verifyEnterpriseSsoToken(
     return null;
   }
 
-  if (!payload.email || payload.isEnterprise !== true) return null;
+  if (typeof payload.email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.email.trim())) return null;
+  if (payload.isEnterprise !== true) return null;
   if (typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) return null;
 
   return payload;
@@ -83,25 +90,53 @@ export function enterpriseSsoPlugin(): BetterAuthPlugin {
           query: z.object({ token: z.string() }),
         },
         async (ctx) => {
-          const secret =
-            process.env.CODERSCLUB_INTER_SERVICE_SECRET ||
-            process.env.BETTER_AUTH_SECRET ||
-            "default_inter_service_secret";
+          // A dedicated secret shared only with Modebills. Falling back to
+          // BETTER_AUTH_SECRET keeps existing deployments working, but means
+          // Modebills holds this app's session secret: set
+          // CODERSCLUB_INTER_SERVICE_SECRET (32+ characters) on both sides.
+          const dedicated = process.env.CODERSCLUB_INTER_SERVICE_SECRET;
+          const secret = dedicated && dedicated.length >= 32 ? dedicated : process.env.BETTER_AUTH_SECRET;
+          if (!dedicated) {
+            console.warn("[sso] CODERSCLUB_INTER_SERVICE_SECRET is not set; verifying SSO tokens with BETTER_AUTH_SECRET.");
+          }
+          if (!secret || secret.length < 32) {
+            throw ctx.redirect("/login?error=sso_not_configured");
+          }
 
           const payload = await verifyEnterpriseSsoToken(ctx.query.token, secret);
           if (!payload) {
             throw ctx.redirect("/login?error=invalid_sso_token");
           }
 
+          // Single use: the token travels in a URL (browser history, logs), so
+          // a copy must not be able to sign in again before it expires.
+          const signature = ctx.query.token.split(".")[2]!;
+          const replayKey = `enterprise-sso:${signature}`;
+          if (await ctx.context.internalAdapter.findVerificationValue(replayKey)) {
+            throw ctx.redirect("/login?error=invalid_sso_token");
+          }
+          await ctx.context.internalAdapter.createVerificationValue({
+            identifier: replayKey,
+            value: "used",
+            expiresAt: new Date(payload.exp * 1000),
+          });
+
           const email = payload.email.trim().toLowerCase();
           const existing = await ctx.context.internalAdapter.findUserByEmail(email);
           let user = existing?.user;
+
+          // SSO only ever signs in learners: never let a school-portal token
+          // open an admin or instructor account that shares the email.
+          const existingRole = (user as { role?: string } | undefined)?.role;
+          if (user && existingRole && existingRole !== "learner") {
+            throw ctx.redirect("/login?error=sso_not_allowed_for_staff");
+          }
 
           if (!user) {
             user = await ctx.context.internalAdapter.createUser(
               {
                 email,
-                name: payload.name?.trim() || email,
+                name: (typeof payload.name === "string" && payload.name.trim().slice(0, 100)) || email,
                 role: "learner",
                 emailVerified: true,
                 isEnterpriseSso: true,

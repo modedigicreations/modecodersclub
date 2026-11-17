@@ -45,6 +45,12 @@ export async function subscribe() {
   redirect(authorizationUrl);
 }
 
+/** The published lesson, if it belongs to `courseId`; otherwise null. */
+async function publishedLessonInCourse(courseId: string, lessonId: string) {
+  const lesson = await prisma.lesson.findUnique({ where: { id: lessonId }, select: { courseId: true, isPublished: true } });
+  return lesson && lesson.courseId === courseId && lesson.isPublished ? lesson : null;
+}
+
 export async function markLessonComplete(courseId: string, lessonId: string) {
   const session = await requireUser();
 
@@ -52,6 +58,8 @@ export async function markLessonComplete(courseId: string, lessonId: string) {
     where: { courseId_userId: { courseId, userId: session.user.id } },
   });
   if (!enrollment) redirect("/dashboard");
+  // Only lessons of this course that learners can see count towards progress.
+  if (!(await publishedLessonInCourse(courseId, lessonId))) redirect(`/dashboard/courses/${courseId}`);
 
   await prisma.lessonProgress.upsert({
     where: { enrollmentId_lessonId: { enrollmentId: enrollment.id, lessonId } },
@@ -67,13 +75,29 @@ export async function markLessonComplete(courseId: string, lessonId: string) {
 // Called directly from the client lab editor (not bound to a form) for
 // silent autosave — no redirect/revalidate, since there's no page
 // transition to make visible.
+const MAX_LAB_CODE = 4000; // LabSubmission columns are VarChar(4000)
+
 export async function saveLabSubmission(labId: string, html: string, css: string, js: string) {
   const session = await requireUser();
+  // Only for a lab in a published lesson of a course this learner is enrolled in.
+  const lab = await prisma.lab.findUnique({
+    where: { id: labId },
+    select: { lesson: { select: { courseId: true, isPublished: true } } },
+  });
+  if (!lab || !lab.lesson.isPublished) return { ok: false as const };
+  const enrolled = await prisma.enrollment.findUnique({
+    where: { courseId_userId: { courseId: lab.lesson.courseId, userId: session.user.id } },
+    select: { id: true },
+  });
+  if (!enrolled) return { ok: false as const };
+
+  const clip = (v: unknown) => (typeof v === "string" ? v.slice(0, MAX_LAB_CODE) : "");
   await prisma.labSubmission.upsert({
     where: { labId_userId: { labId, userId: session.user.id } },
-    create: { labId, userId: session.user.id, html, css, js },
-    update: { html, css, js },
+    create: { labId, userId: session.user.id, html: clip(html), css: clip(css), js: clip(js) },
+    update: { html: clip(html), css: clip(css), js: clip(js) },
   });
+  return { ok: true as const };
 }
 
 // Scores server-side from the stored questions — never trusts a
@@ -87,6 +111,7 @@ export async function submitAssessment(courseId: string, lessonId: string, formD
   });
   if (!enrollment) redirect("/dashboard");
 
+  if (!(await publishedLessonInCourse(courseId, lessonId))) redirect(`/dashboard/courses/${courseId}`);
   const assessment = await prisma.assessment.findUnique({ where: { lessonId } });
   if (!assessment) redirect(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
 

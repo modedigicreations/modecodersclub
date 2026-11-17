@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/session";
 import type { Metadata } from "next";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
@@ -26,6 +27,9 @@ export default async function CourseGeneratorPage({
 }: {
   searchParams: Promise<{ error?: string; started?: string; published?: string }>;
 }) {
+  // Every admin page checks itself: the layout's check alone doesn't stop this
+  // page rendering (layouts and pages render in parallel), which leaked admin data.
+  await requireAdmin();
   const { error, started, published } = await searchParams;
   await failStaleJobs();
   const jobs = await prisma.courseGenerationJob.findMany({
