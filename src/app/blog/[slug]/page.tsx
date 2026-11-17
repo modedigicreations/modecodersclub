@@ -11,7 +11,7 @@ type Props = { params: Promise<{ slug: string }> };
 
 function findPost(slug: string) {
   return prisma.blogPost.findFirst({
-    where: { slug, publishedAt: { not: null, lte: new Date() } },
+    where: { slug, publishedAt: { not: null } },
     include: { author: { select: { name: true } } },
   });
 }

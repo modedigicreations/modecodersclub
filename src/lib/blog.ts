@@ -118,7 +118,7 @@ export function readBlogForm(form: FormData): BlogInput | string {
 
 export function publishedPosts(take = 20, skip = 0) {
   return prisma.blogPost.findMany({
-    where: { publishedAt: { not: null, lte: new Date() } },
+    where: { publishedAt: { not: null } },
     orderBy: { publishedAt: "desc" },
     take,
     skip,
