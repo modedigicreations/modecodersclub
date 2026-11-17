@@ -336,6 +336,9 @@ model Subscription {
   paystackReference String   @unique @db.VarChar(100)
   amountKobo        Int
   createdAt         DateTime @default(now())
+  // Set when the "expires in 7 days" / "has expired" emails go out (once each).
+  reminderSentAt      DateTime?
+  expiredNoticeSentAt DateTime?
 
   @@index([userId, expiresAt])
 }

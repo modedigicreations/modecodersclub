@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import prisma from "@/lib/prisma";
 import { computeProgress, issueCertificateIfComplete } from "@/lib/course-completion";
 import { checkEnrolment, enrol } from "@/lib/enrolment";
+import { runSubscriptionReminders } from "@/lib/subscription-reminders";
 
 if (/railway|rlwy|amazonaws|supabase|neon\.tech/i.test(process.env.DATABASE_URL ?? "")) {
   throw new Error("DATABASE_URL looks like a hosted database; refusing to run tests that write data.");
@@ -131,6 +132,46 @@ describe("F2 self-service enrolment", () => {
     const again = await enrol(learner, paid.id, learner);
     assert.equal(again.ok && again.created, false);
     assert.equal(await prisma.enrollment.count({ where: { userId: learner, courseId: paid.id } }), 1);
+  });
+});
+
+describe("F3 subscription reminders", () => {
+  test("7-day reminder and expiry notice, once each; not after a renewal; not for old or school subscriptions", async () => {
+    const day = 86_400_000;
+    const now = new Date();
+    const mk = async (key: string, endsInDays: number[], sso = false) => {
+      const id = `${P}-rem-${key}`;
+      await prisma.user.create({ data: { id, name: key, email: `${id}@example.com`, isEnterpriseSso: sso } });
+      for (const [i, d] of endsInDays.entries()) {
+        await prisma.subscription.create({
+          data: { userId: id, paystackReference: `mcc-sub-${id}-${i}`, amountKobo: 500000, expiresAt: new Date(now.getTime() + d * day) },
+        });
+      }
+      return id;
+    };
+    const soon = await mk("soon", [5]);
+    const renewed = await mk("renewed", [5, 187]);
+    const ended = await mk("ended", [-1]);
+    const old = await mk("old", [-10]);
+    const school = await mk("school", [5], true);
+
+    // Other rows from earlier tests may exist; look only at ours.
+    await runSubscriptionReminders(now);
+    const row = (u: string) => prisma.subscription.findFirstOrThrow({ where: { userId: u }, orderBy: { expiresAt: "desc" } });
+    assert.ok((await row(soon)).reminderSentAt, "reminder sent 5 days before the end");
+    assert.equal((await row(renewed)).reminderSentAt, null, "renewed: the latest period ends in 187 days");
+    assert.equal((await prisma.subscription.findFirstOrThrow({ where: { userId: renewed }, orderBy: { expiresAt: "asc" } })).reminderSentAt, null);
+    const e = await row(ended);
+    assert.ok(e.expiredNoticeSentAt, "expiry notice sent");
+    assert.equal(e.status, "expired");
+    assert.equal((await row(old)).expiredNoticeSentAt, null, "subscriptions that ended long ago are left alone");
+    assert.equal((await row(school)).reminderSentAt, null, "school (SSO) learners don't get billing emails");
+
+    const firstSoon = (await row(soon)).reminderSentAt!.getTime();
+    const second = await runSubscriptionReminders(new Date(now.getTime() + 60_000));
+    assert.equal((await row(soon)).reminderSentAt!.getTime(), firstSoon, "not sent twice");
+    assert.equal(second.reminders, 0);
+    assert.equal(second.expired, 0);
   });
 });
 

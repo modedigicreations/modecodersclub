@@ -31,7 +31,7 @@ export async function subscribe() {
   const session = await requireUser();
 
   const baseUrl = process.env.BETTER_AUTH_URL;
-  if (!baseUrl) redirect("/dashboard?error=" + encodeURIComponent("Subscriptions aren't configured yet."));
+  if (!baseUrl) redirect("/dashboard/billing?error=" + encodeURIComponent("Subscriptions aren't configured yet."));
 
   let authorizationUrl: string;
   try {
@@ -47,7 +47,7 @@ export async function subscribe() {
   } catch (error) {
     if (isRedirectError(error)) throw error;
     const message = error instanceof Error ? error.message : "Could not start checkout.";
-    redirect(`/dashboard?error=${encodeURIComponent(message)}`);
+    redirect(`/dashboard/billing?error=${encodeURIComponent(message)}`);
   }
 
   redirect(authorizationUrl);

@@ -53,3 +53,16 @@ enrolled learners get published lessons).
 - `COURSE_GENERATE_DAILY_LIMIT` (default 5) caps runs per admin per 24 hours; one run at a time per admin.
 - Runs in the background on the server; a run interrupted by a restart or deploy is marked failed after 15 minutes.
 - Tests: `npm test` (uses a fake Claude and a **throwaway** `DATABASE_URL`; it writes and deletes rows).
+
+## Subscriptions: billing page and reminder emails
+
+Learners see their status, payment history and a Subscribe/Renew button at `/dashboard/billing`. Renewing early adds the
+new period after the current one ends.
+
+A daily job emails a reminder 7 days before a subscription ends and a notice when it has ended (once each, never after
+the learner has renewed, never to school/SSO learners). Set `CRON_SECRET` (16+ random characters) and call it once a
+day, for example with a Railway cron service:
+
+```bash
+curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" https://<your-app>/api/cron/subscription-reminders
+```
