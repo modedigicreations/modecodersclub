@@ -105,7 +105,7 @@ export function readBlogForm(form: FormData): BlogInput | string {
   if (excerptRaw.length > BLOG_EXCERPT_MAX) return `Keep the summary under ${BLOG_EXCERPT_MAX} characters.`;
   const coverRaw = String(form.get("coverImageUrl") ?? "").trim();
   const coverImageUrl = coverRaw ? safeUrl(coverRaw) : null;
-  if (coverRaw && !coverImageUrl) return "The cover image must be a web address starting with https://";
+  if (coverRaw && !coverImageUrl) return "The cover image couldn't be read. Upload it again.";
   return {
     title,
     slug: String(form.get("slug") ?? "").trim() || title,

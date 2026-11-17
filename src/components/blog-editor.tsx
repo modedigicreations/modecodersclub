@@ -2,14 +2,15 @@
 
 // Rich text editor for blog posts. Ported from the modecbt QuestionEditor
 // (TipTap + the same toolbar layout), without the math, colour and media
-// library pieces this site doesn't have; images are added by web address.
+// library pieces; images are uploaded to R2 (button, paste or drag and drop).
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { IMAGE_ACCEPT, altFromName, uploadImageFile } from "@/lib/upload-image-client";
 
 type Panel = null | "link" | "image";
 
@@ -42,11 +43,31 @@ function ToolButton({
   );
 }
 
-function MenuBar({ editor }: { editor: Editor }) {
+function MenuBar({ editor, uploading, uploadError }: { editor: Editor; uploading: boolean; uploadError: string }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [url, setUrl] = useState("");
   const [alt, setAlt] = useState("");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState<"idle" | "uploading">("idle");
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  async function onFile(file: File | undefined) {
+    if (!file) return;
+    setError("");
+    setPending("uploading");
+    setPanel("image");
+    try {
+      const uploaded = await uploadImageFile(file);
+      setUrl(uploaded);
+      setAlt(altFromName(file.name));
+    } catch (e) {
+      setUrl("");
+      setError(e instanceof Error ? e.message : "The upload failed.");
+    } finally {
+      setPending("idle");
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  }
   const state = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -89,7 +110,7 @@ function MenuBar({ editor }: { editor: Editor }) {
         return setError("Links must start with https://, mailto: or /");
       }
     } else if (panel === "image") {
-      if (!/^https?:\/\//i.test(value)) return setError("Paste an image address starting with https://");
+      if (!value) return setError("Choose an image first.");
       chain().setImage({ src: value, alt: alt.trim() }).run();
     }
     setPanel(null);
@@ -118,15 +139,53 @@ function MenuBar({ editor }: { editor: Editor }) {
         <ToolButton label="Align right" active={state.right} onClick={() => chain().setTextAlign("right").run()}>⇥</ToolButton>
         <span className="sep" aria-hidden="true" />
         <ToolButton label="Link" active={state.link || panel === "link"} onClick={() => openPanel("link")}>🔗 Link</ToolButton>
-        <ToolButton label="Image" active={panel === "image"} onClick={() => openPanel("image")}>🖼 Image</ToolButton>
+        <ToolButton label="Upload image" active={panel === "image"} disabled={pending === "uploading" || uploading} onClick={() => fileInput.current?.click()}>
+          🖼 {pending === "uploading" || uploading ? "Uploading…" : "Image"}
+        </ToolButton>
+        <input
+          ref={fileInput}
+          type="file"
+          accept={IMAGE_ACCEPT}
+          hidden
+          aria-hidden="true"
+          tabIndex={-1}
+          onChange={(e) => void onFile(e.target.files?.[0])}
+        />
         <span className="sep" aria-hidden="true" />
         <ToolButton label="Undo" disabled={!state.canUndo} onClick={() => chain().undo().run()}>↶</ToolButton>
         <ToolButton label="Redo" disabled={!state.canRedo} onClick={() => chain().redo().run()}>↷</ToolButton>
       </div>
-      {panel && (
+      {uploadError && !panel && <p className="auth-error blog-editor-inline-error">{uploadError}</p>}
+      {panel === "image" && (
+        <div className="blog-editor-panel">
+          {pending === "uploading" ? (
+            <p>Uploading your image…</p>
+          ) : url ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element -- preview of the uploaded file */}
+              <img className="blog-editor-preview" src={url} alt="" />
+              <label>
+                Describe the image for people using screen readers
+                <input value={alt} maxLength={200} autoFocus onChange={(e) => setAlt(e.target.value)} placeholder="e.g. Students at the hackathon" />
+              </label>
+            </>
+          ) : null}
+          {error && <p className="auth-error">{error}</p>}
+          <div className="blog-editor-panel-actions">
+            {url && pending === "idle" && (
+              <button type="button" className="button button-small button-primary" onClick={apply}>Insert image</button>
+            )}
+            {error && (
+              <button type="button" className="button button-small" onClick={() => fileInput.current?.click()}>Choose another image</button>
+            )}
+            <button type="button" className="text-link" onClick={() => setPanel(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {panel === "link" && (
         <div className="blog-editor-panel">
           <label>
-            {panel === "link" ? "Link address (leave empty to remove the link)" : "Image address"}
+            Link address (leave empty to remove the link)
             <input
               type="url"
               value={url}
@@ -141,16 +200,10 @@ function MenuBar({ editor }: { editor: Editor }) {
               }}
             />
           </label>
-          {panel === "image" && (
-            <label>
-              Description for screen readers
-              <input value={alt} maxLength={200} onChange={(e) => setAlt(e.target.value)} placeholder="e.g. Students at the hackathon" />
-            </label>
-          )}
           {error && <p className="auth-error">{error}</p>}
           <div className="blog-editor-panel-actions">
             <button type="button" className="button button-small button-primary" onClick={apply}>
-              {panel === "link" ? "Apply link" : "Insert image"}
+              Apply link
             </button>
             <button type="button" className="text-link" onClick={() => setPanel(null)}>Cancel</button>
           </div>
@@ -174,6 +227,31 @@ export function BlogEditor({
   placeholder?: string;
 }) {
   const [json, setJson] = useState(() => JSON.stringify(initialContent));
+  const [uploading, setUploading] = useState(0);
+  const [uploadError, setUploadError] = useState("");
+  const editorRef = useRef<Editor | null>(null);
+
+  // Pasted or dropped image files are uploaded, then inserted where they landed.
+  function uploadFiles(files: File[], pos?: number) {
+    const images = files.filter((f) => f.type.startsWith("image/"));
+    if (images.length === 0) return false;
+    setUploadError("");
+    for (const file of images) {
+      setUploading((n) => n + 1);
+      uploadImageFile(file)
+        .then((src) => {
+          const ed = editorRef.current;
+          if (!ed) return;
+          const node = { type: "image", attrs: { src, alt: altFromName(file.name) } };
+          if (pos !== undefined) ed.chain().focus().insertContentAt(pos, node).run();
+          else ed.chain().focus().insertContent(node).run();
+        })
+        .catch((e) => setUploadError(e instanceof Error ? e.message : "The upload failed."))
+        .finally(() => setUploading((n) => n - 1));
+    }
+    return true;
+  }
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -187,13 +265,26 @@ export function BlogEditor({
       TextAlign.configure({ types: ["heading", "paragraph"] }),
     ],
     content: initialContent as object,
-    editorProps: { attributes: { class: "blog-prose blog-editor-content", "aria-label": "Post content" } },
+    editorProps: {
+      attributes: { class: "blog-prose blog-editor-content", "aria-label": "Post content" },
+      handlePaste: (_view, event) => uploadFiles([...(event.clipboardData?.files ?? [])]),
+      handleDrop: (view, event, _slice, moved) => {
+        if (moved || !event.dataTransfer?.files.length) return false;
+        const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+        if (!uploadFiles([...event.dataTransfer.files], pos)) return false;
+        event.preventDefault();
+        return true;
+      },
+    },
+    onCreate: ({ editor: e }) => {
+      editorRef.current = e;
+    },
     onUpdate: ({ editor: e }) => setJson(JSON.stringify(e.getJSON())),
   });
 
   return (
     <div className="blog-editor">
-      {editor ? <MenuBar editor={editor} /> : <div className="blog-editor-toolbar" style={{ minHeight: 44 }} />}
+      {editor ? <MenuBar editor={editor} uploading={uploading > 0} uploadError={uploadError} /> : <div className="blog-editor-toolbar" style={{ minHeight: 44 }} />}
       <EditorContent editor={editor} />
       <input type="hidden" name={name} value={json} />
     </div>

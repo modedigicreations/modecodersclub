@@ -1,4 +1,5 @@
 import { BlogEditor } from "@/components/blog-editor";
+import { CoverImageField } from "@/components/cover-image-field";
 import { BLOG_EXCERPT_MAX, BLOG_TITLE_MAX, EMPTY_DOC } from "@/lib/blog";
 import { saveBlogPost } from "./actions";
 
@@ -22,15 +23,12 @@ export function PostForm({ post }: { post?: Post }) {
       </label>
       <BlogEditor name="content" initialContent={post?.content ?? EMPTY_DOC} />
       <details className="blog-form-extra" open={!post}>
-        <summary>Summary, cover image, tags and web address</summary>
+        <summary>Cover image, summary, tags and web address</summary>
         <label>
           Summary (shown on the blog list and when shared; left empty, it&rsquo;s taken from the post)
           <textarea name="excerpt" rows={2} maxLength={BLOG_EXCERPT_MAX} defaultValue={post?.excerpt} />
         </label>
-        <label>
-          Cover image address (optional)
-          <input name="coverImageUrl" type="url" defaultValue={post?.coverImageUrl ?? ""} placeholder="https://" />
-        </label>
+        <CoverImageField name="coverImageUrl" initialUrl={post?.coverImageUrl ?? null} />
         <label>
           Tags (comma separated)
           <input name="tags" defaultValue={post?.tags.join(", ")} placeholder="events, javascript, tips" />

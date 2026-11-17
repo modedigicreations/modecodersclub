@@ -72,11 +72,23 @@ test("urls, tags, excerpts and form validation", () => {
   const content = JSON.stringify(doc([p(t("Hello club"))]));
   assert.match(readBlogForm(form({ title: "", content })) as string, /title/);
   assert.match(readBlogForm(form({ title: "T", content: JSON.stringify(doc([p()])) })) as string, /Write something/);
-  assert.match(readBlogForm(form({ title: "T", content, coverImageUrl: "javascript:x" })) as string, /https/);
+  assert.match(readBlogForm(form({ title: "T", content, coverImageUrl: "javascript:x" })) as string, /Upload it again/);
   const ok = readBlogForm(form({ title: "  Hello  ", content, tags: "a, b" }));
   assert.equal(typeof ok, "object");
   assert.deepEqual(
     { ...(ok as object), content: undefined },
     { title: "Hello", slug: "Hello", excerpt: "Hello club", coverImageUrl: null, tags: ["a", "b"], content: undefined },
   );
+});
+
+test("image uploads: only real JPG/PNG/WebP/GIF bytes are accepted", async () => {
+  const { sniffImage } = await import("@/lib/r2");
+  const pad = (head: number[]) => new Uint8Array([...head, ...new Array(16).fill(0)]);
+  assert.equal(sniffImage(pad([0xff, 0xd8, 0xff, 0xe0]))?.ext, "jpg");
+  assert.equal(sniffImage(pad([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))?.ext, "png");
+  assert.equal(sniffImage(pad([...Buffer.from("GIF89a")]))?.ext, "gif");
+  assert.equal(sniffImage(new Uint8Array([...Buffer.from("RIFF"), 0, 0, 0, 0, ...Buffer.from("WEBPVP8 ")]))?.ext, "webp");
+  assert.equal(sniffImage(pad([...Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)">')])), null, "SVG refused");
+  assert.equal(sniffImage(pad([...Buffer.from("<html><script>")])), null);
+  assert.equal(sniffImage(new Uint8Array([0xff, 0xd8])), null, "too short");
 });
