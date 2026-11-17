@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireInstructorAccess } from "@/lib/session";
 import prisma from "@/lib/prisma";
+import { getCourseLearnerProgress } from "@/lib/learner-progress";
 import {
   assignInstructor,
   createLesson,
@@ -28,13 +29,9 @@ export default async function InstructorCourseWorkspacePage({
   const course = await prisma.course.findUnique({ where: { id } });
   if (!course) notFound();
 
-  const [lessons, enrollments, instructors] = await Promise.all([
+  const [lessons, progress, instructors] = await Promise.all([
     prisma.lesson.findMany({ where: { courseId: id }, orderBy: { position: "asc" } }),
-    prisma.enrollment.findMany({
-      where: { courseId: id },
-      orderBy: { enrolledAt: "desc" },
-      include: { user: { select: { name: true, email: true } } },
-    }),
+    getCourseLearnerProgress(id),
     isAdmin
       ? prisma.courseInstructor.findMany({
           where: { courseId: id },
@@ -120,7 +117,14 @@ export default async function InstructorCourseWorkspacePage({
         </table>
       )}
 
-      <h2 style={{ fontSize: 16, marginBottom: 12 }}>Enrolled students</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <h2 style={{ fontSize: 16, marginBottom: 12 }}>Enrolled students &amp; progress ({progress.length})</h2>
+        {progress.length > 0 && (
+          <a className="text-link" href={`/api/instructor/courses/${id}/progress`}>
+            Download progress (CSV) <span aria-hidden="true">↓</span>
+          </a>
+        )}
+      </div>
       <form className="admin-form" action={enrollStudent.bind(null, id)}>
         <div>
           <label htmlFor="email">Learner&rsquo;s email</label>
@@ -131,37 +135,71 @@ export default async function InstructorCourseWorkspacePage({
         </button>
       </form>
 
-      {enrollments.length === 0 ? (
+      {progress.length === 0 ? (
         <p className="admin-empty">No one enrolled yet.</p>
       ) : (
-        <table className="admin-table" style={{ marginBottom: isAdmin ? 36 : 0 }}>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Enrolled</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {enrollments.map((enrollment) => (
-              <tr key={enrollment.id}>
-                <td>{enrollment.user.name}</td>
-                <td>{enrollment.user.email}</td>
-                <td>{new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(enrollment.enrolledAt)}</td>
-                <td>
-                  <form action={unenrollStudent.bind(null, id, enrollment.id)}>
-                    <div className="admin-actions">
-                      <button type="submit" className="danger">
-                        Unenroll
-                      </button>
-                    </div>
-                  </form>
-                </td>
+        <div style={{ overflowX: "auto", marginBottom: isAdmin ? 36 : 0 }}>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Learner</th>
+                <th>Lessons</th>
+                <th>Quizzes</th>
+                <th>Labs</th>
+                <th>Last active</th>
+                <th>Certificate</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {progress.map((row) => (
+                <tr key={row.enrollmentId}>
+                  <td>
+                    <strong>{row.name}</strong>
+                    {row.isSchool && <span style={{ fontSize: 10, fontWeight: 800, marginLeft: 6 }}>SCHOOL</span>}
+                    <br />
+                    <span style={{ color: "var(--muted)", fontSize: 11 }}>{row.email}</span>
+                  </td>
+                  <td>
+                    {row.lessonsDone}/{row.totalLessons} ({row.percent}%)
+                    <div className="progress-bar" style={{ height: 6, marginTop: 4, minWidth: 80 }} aria-hidden="true">
+                      <span style={{ width: `${row.percent}%` }} />
+                    </div>
+                  </td>
+                  <td>
+                    {row.quizzesPassed}/{row.quizzesTotal} passed
+                    {row.quizAverage !== null && (
+                      <>
+                        <br />
+                        <span style={{ color: "var(--muted)", fontSize: 11 }}>avg {row.quizAverage}%</span>
+                      </>
+                    )}
+                  </td>
+                  <td>
+                    {row.labsPassed}/{row.labsTotal} passed
+                    {row.labsStarted > row.labsPassed && (
+                      <>
+                        <br />
+                        <span style={{ color: "var(--muted)", fontSize: 11 }}>{row.labsStarted} started</span>
+                      </>
+                    )}
+                  </td>
+                  <td>{row.lastActivity ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(row.lastActivity) : "—"}</td>
+                  <td style={{ fontSize: 11 }}>{row.certificateNumber ?? "—"}</td>
+                  <td>
+                    <form action={unenrollStudent.bind(null, id, row.enrollmentId)}>
+                      <div className="admin-actions">
+                        <button type="submit" className="danger">
+                          Unenroll
+                        </button>
+                      </div>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {isAdmin && (

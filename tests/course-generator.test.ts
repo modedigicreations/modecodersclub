@@ -52,7 +52,7 @@ function lessonDraft(title: string): LessonDraft {
       { question: "Bad: 3 options", options: ["a", "b", "c"], correctIndex: 0 },
       { question: "Bad: index", options: ["a", "b", "c", "d"], correctIndex: 7 },
     ],
-    lab: { instructions: "Make the button say hello.", starterHtml: "<button>Click</button>", starterCss: "", starterJs: "// TODO" },
+    lab: { instructions: "Make the button say hello.", starterHtml: "<button>Click</button>", starterCss: "", starterJs: "// TODO", checks: ["js: addEventListener | Listen for clicks", "nonsense line"] },
   };
 }
 
@@ -76,6 +76,9 @@ function fakeClaude(opts: FakeOptions = {}): { call: StructuredCall; calls: { pr
   }) as StructuredCall;
   return { call, calls };
 }
+
+// Only this file's generated courses (other test files add courses in parallel).
+const generatedCourses = () => prisma.course.count({ where: { name: curriculum().course.name } });
 
 const input = (over: Partial<JobInput> = {}): JobInput => ({
   topic: "Build your first website",
@@ -164,6 +167,7 @@ describe("generation job", () => {
     assert.equal(questions.length, 3, "the two malformed questions were dropped");
     assert.deepEqual(saved.lessons.map((l) => Boolean(l.lab)), [true, false, false, true, false, false]);
     assert.equal(saved.lessons[0]!.lab!.hintsEnabled, true);
+    assert.deepEqual(saved.lessons[0]!.lab!.checks, [{ kind: "js", text: "addEventListener", message: "Listen for clicks" }], "unreadable checks dropped");
 
     const done = await prisma.courseGenerationJob.findUniqueOrThrow({ where: { id: job.id } });
     assert.equal(done.status, "succeeded");
@@ -193,22 +197,22 @@ describe("generation job", () => {
   });
 
   test("a refused curriculum fails the job and saves nothing", async () => {
-    const before = await prisma.course.count();
+    const before = await generatedCourses();
     const job = await createGenerationJob(ADMIN_ID, input());
     assert.equal(await runGenerationJob(job.id, { call: fakeClaude({ failCurriculum: true }).call }), null);
     const failed = await prisma.courseGenerationJob.findUniqueOrThrow({ where: { id: job.id } });
     assert.equal(failed.status, "failed");
     assert.match(failed.error ?? "", /declined/);
-    assert.equal(await prisma.course.count(), before);
+    assert.equal(await generatedCourses(), before);
   });
 
   test("too many lessons failing fails the job and saves nothing; one failure is left out and reported", async () => {
     await cleanup(); // stay under the daily limit
-    const before = await prisma.course.count();
+    const before = await generatedCourses();
     const bad = await createGenerationJob(ADMIN_ID, input());
     await runGenerationJob(bad.id, { call: fakeClaude({ failLessonsAlways: new Set([1, 2, 3]) }).call });
     assert.equal((await prisma.courseGenerationJob.findUniqueOrThrow({ where: { id: bad.id } })).status, "failed");
-    assert.equal(await prisma.course.count(), before);
+    assert.equal(await generatedCourses(), before);
 
     const ok = await createGenerationJob(ADMIN_ID, input());
     const course = await runGenerationJob(ok.id, { call: fakeClaude({ failLessonsAlways: new Set([4]) }).call });

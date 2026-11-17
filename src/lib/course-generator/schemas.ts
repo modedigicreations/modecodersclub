@@ -60,6 +60,13 @@ export const LessonDraftSchema = z.object({
       starterHtml: z.string().describe("Starter HTML (may be empty), at most 3000 characters."),
       starterCss: z.string().describe("Starter CSS (may be empty), at most 3000 characters."),
       starterJs: z.string().describe("Starter JavaScript (may be empty), at most 3000 characters."),
+      checks: z
+        .array(z.string())
+        .describe(
+          'Auto-grading checks, 2-6 lines, one per instruction step. Formats: \'html: <css selector> [*N] ["text"] | message\', ' +
+            '\'css: <selector> { <property>[: value] } | message\', \'js: <exact code text> | message\'. ' +
+            'The message tells the learner what the check wants, e.g. \'html: ul > li *3 | List at least three hobbies\'.',
+        ),
     })
     .nullable()
     .describe("A browser coding lab, or null when no lab was requested for this lesson."),

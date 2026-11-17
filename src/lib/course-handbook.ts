@@ -105,16 +105,9 @@ class Writer {
   }
   /** Lesson body: 4-space-indented lines are code (monospace), the rest prose. */
   body(content: string) {
-    const blocks: { code: boolean; lines: string[] }[] = [];
-    for (const line of content.replace(/\r\n/g, "\n").split("\n")) {
-      const code = /^( {4}|\t)/.test(line);
-      const last = blocks.at(-1);
-      if (last && last.code === code) last.lines.push(code ? line.replace(/^( {4}|\t)/, "") : line);
-      else blocks.push({ code, lines: [code ? line.replace(/^( {4}|\t)/, "") : line] });
-    }
-    for (const b of blocks) {
-      if (b.code) this.text(b.lines.join("\n"), { font: "mono", size: 9, indent: 14, gap: 8 });
-      else this.text(b.lines.join("\n"), { gap: 6 });
+    for (const b of contentBlocks(content)) {
+      if (b.code) this.text(b.text, { font: "mono", size: 9, indent: 14, gap: 8 });
+      else this.text(b.text, { gap: 6 });
     }
   }
   rule() {
@@ -130,7 +123,19 @@ class Writer {
   }
 }
 
-function questionsOf(assessment: { questions: unknown } | null): { question: string; options: string[] }[] {
+/** Lesson text split into prose and code (lines indented 4 spaces or a tab). */
+export function contentBlocks(content: string): { code: boolean; text: string }[] {
+  const blocks: { code: boolean; lines: string[] }[] = [];
+  for (const line of content.replace(/\r\n/g, "\n").split("\n")) {
+    const code = /^( {4}|\t)/.test(line);
+    const last = blocks.at(-1);
+    if (last && last.code === code) last.lines.push(code ? line.replace(/^( {4}|\t)/, "") : line);
+    else blocks.push({ code, lines: [code ? line.replace(/^( {4}|\t)/, "") : line] });
+  }
+  return blocks.map((b) => ({ code: b.code, text: b.lines.join("\n") }));
+}
+
+export function questionsOf(assessment: { questions: unknown } | null): { question: string; options: string[] }[] {
   if (!assessment || !Array.isArray(assessment.questions)) return [];
   return (assessment.questions as { question?: unknown; options?: unknown }[])
     .filter((q) => typeof q?.question === "string" && Array.isArray(q.options))

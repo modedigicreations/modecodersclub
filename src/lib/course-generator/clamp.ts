@@ -1,3 +1,4 @@
+import { type LabCheck, MAX_CHECKS, parseChecks } from "@/lib/lab-checks";
 import type { Curriculum, LessonDraft } from "./schemas";
 import { COURSE_COLORS } from "./schemas";
 
@@ -91,7 +92,13 @@ export function cleanQuiz(quiz: LessonDraft["quiz"] | undefined): CleanQuestion[
   return out.slice(0, 10);
 }
 
-export type CleanLab = { instructions: string; starterHtml: string; starterCss: string; starterJs: string };
+export type CleanLab = {
+  instructions: string;
+  starterHtml: string;
+  starterCss: string;
+  starterJs: string;
+  checks: LabCheck[];
+};
 
 export function cleanLab(lab: LessonDraft["lab"] | undefined): CleanLab | null {
   if (!lab) return null;
@@ -102,6 +109,8 @@ export function cleanLab(lab: LessonDraft["lab"] | undefined): CleanLab | null {
     starterHtml: clampText(lab.starterHtml, 4000),
     starterCss: clampText(lab.starterCss, 4000),
     starterJs: clampText(lab.starterJs, 4000),
+    // Unreadable lines are dropped rather than failing the lesson.
+    checks: parseChecks((lab.checks ?? []).slice(0, MAX_CHECKS).join("\n")).checks,
   };
 }
 

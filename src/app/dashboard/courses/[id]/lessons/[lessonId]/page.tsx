@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { toEmbedUrl } from "@/lib/video-embed";
 import { LabEditor } from "@/components/lab-editor";
+import { storedChecks } from "@/lib/lab-checks";
 import { markLessonComplete, submitAssessment } from "../../../../actions";
 
 type AssessmentQuestion = { question: string; options: string[]; correctIndex: number };
@@ -75,6 +76,8 @@ export default async function DashboardLessonPage({
               lessonId={lessonId}
               labId={lab.id}
               hintsEnabled={lab.hintsEnabled}
+              checkCount={storedChecks(lab.checks).length}
+              passed={Boolean(submission?.passedAt)}
               initial={{
                 html: submission?.html ?? lab.starterHtml,
                 css: submission?.css ?? lab.starterCss,

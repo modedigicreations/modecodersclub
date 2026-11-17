@@ -25,7 +25,7 @@ Lesson text:
 
 Quiz: exactly 5 multiple-choice questions, each with exactly 4 distinct options and one correct answer (correctIndex 0-3). Test understanding, not trivia; avoid "all of the above".
 
-Lab: when a lab is requested, give clear step-by-step instructions and starter HTML/CSS/JavaScript that runs in a browser sandbox with no external libraries or network calls; leave the parts the learner should write as TODO comments. When no lab is requested, return null for lab.
+Lab: when a lab is requested, give clear step-by-step instructions and starter HTML/CSS/JavaScript that runs in a browser sandbox with no external libraries or network calls; leave the parts the learner should write as TODO comments. Add 2-6 auto-grading checks that the finished work passes and the starter code does not, matching the instructions' steps. When no lab is requested, return null for lab.
 
 Respect every length limit given in the field descriptions.`;
 

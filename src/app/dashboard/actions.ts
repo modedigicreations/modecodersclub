@@ -6,6 +6,25 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { SUBSCRIPTION_AMOUNT_KOBO, initializeTransaction } from "@/lib/paystack";
+import { issueCertificateIfComplete } from "@/lib/course-completion";
+import type { CheckResult } from "@/lib/lab-checks";
+import { recordLabCheck } from "@/lib/lab-submissions";
+import { recordLearning } from "@/lib/achievements";
+
+/** Certificate check after progress changes; never blocks the learner's action. */
+async function checkCertificate(userId: string, courseId: string) {
+  await issueCertificateIfComplete(userId, courseId).catch((err) =>
+    console.error("[certificates] automatic issue failed:", err instanceof Error ? err.message : err),
+  );
+  await logLearning(userId);
+}
+
+/** Streak day and badges; never blocks the learner's action. */
+async function logLearning(userId: string) {
+  await recordLearning(userId).catch((err) =>
+    console.error("[achievements] update failed:", err instanceof Error ? err.message : err),
+  );
+}
 
 type AssessmentQuestion = { question: string; options: string[]; correctIndex: number };
 
@@ -23,7 +42,7 @@ export async function subscribe() {
   const session = await requireUser();
 
   const baseUrl = process.env.BETTER_AUTH_URL;
-  if (!baseUrl) redirect("/dashboard?error=" + encodeURIComponent("Subscriptions aren't configured yet."));
+  if (!baseUrl) redirect("/dashboard/billing?error=" + encodeURIComponent("Subscriptions aren't configured yet."));
 
   let authorizationUrl: string;
   try {
@@ -39,7 +58,7 @@ export async function subscribe() {
   } catch (error) {
     if (isRedirectError(error)) throw error;
     const message = error instanceof Error ? error.message : "Could not start checkout.";
-    redirect(`/dashboard?error=${encodeURIComponent(message)}`);
+    redirect(`/dashboard/billing?error=${encodeURIComponent(message)}`);
   }
 
   redirect(authorizationUrl);
@@ -66,6 +85,7 @@ export async function markLessonComplete(courseId: string, lessonId: string) {
     update: {},
     create: { enrollmentId: enrollment.id, lessonId },
   });
+  await checkCertificate(session.user.id, courseId);
 
   revalidatePath(`/dashboard/courses/${courseId}`);
   revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
@@ -77,27 +97,54 @@ export async function markLessonComplete(courseId: string, lessonId: string) {
 // transition to make visible.
 const MAX_LAB_CODE = 4000; // LabSubmission columns are VarChar(4000)
 
-export async function saveLabSubmission(labId: string, html: string, css: string, js: string) {
-  const session = await requireUser();
-  // Only for a lab in a published lesson of a course this learner is enrolled in.
+/** The lab, if it's in a published lesson of a course this learner is enrolled in. */
+async function labForLearner(labId: string, userId: string) {
   const lab = await prisma.lab.findUnique({
     where: { id: labId },
     select: { lesson: { select: { courseId: true, isPublished: true } } },
   });
-  if (!lab || !lab.lesson.isPublished) return { ok: false as const };
+  if (!lab || !lab.lesson.isPublished) return null;
   const enrolled = await prisma.enrollment.findUnique({
-    where: { courseId_userId: { courseId: lab.lesson.courseId, userId: session.user.id } },
+    where: { courseId_userId: { courseId: lab.lesson.courseId, userId } },
     select: { id: true },
   });
-  if (!enrolled) return { ok: false as const };
+  return enrolled ? lab : null;
+}
 
-  const clip = (v: unknown) => (typeof v === "string" ? v.slice(0, MAX_LAB_CODE) : "");
+const clipCode = (v: unknown) => (typeof v === "string" ? v.slice(0, MAX_LAB_CODE) : "");
+
+export async function saveLabSubmission(labId: string, html: string, css: string, js: string) {
+  const session = await requireUser();
+  if (!(await labForLearner(labId, session.user.id))) return { ok: false as const };
+  const code = { html: clipCode(html), css: clipCode(css), js: clipCode(js) };
   await prisma.labSubmission.upsert({
     where: { labId_userId: { labId, userId: session.user.id } },
-    create: { labId, userId: session.user.id, html: clip(html), css: clip(css), js: clip(js) },
-    update: { html: clip(html), css: clip(css), js: clip(js) },
+    create: { labId, userId: session.user.id, ...code },
+    update: code,
   });
   return { ok: true as const };
+}
+
+// "Check my work": saves the code, grades it on the server against the
+// lab's checks (static analysis, the code is never run here) and records
+// the first full pass.
+export async function checkLabWork(
+  labId: string,
+  html: string,
+  css: string,
+  js: string,
+): Promise<{ ok: false } | { ok: true; results: CheckResult[]; passed: boolean }> {
+  const session = await requireUser();
+  const lab = await labForLearner(labId, session.user.id);
+  if (!lab) return { ok: false };
+  const outcome = await recordLabCheck(labId, session.user.id, {
+    html: clipCode(html),
+    css: clipCode(css),
+    js: clipCode(js),
+  });
+  if (!outcome) return { ok: false };
+  await logLearning(session.user.id);
+  return { ok: true, ...outcome };
 }
 
 // Scores server-side from the stored questions — never trusts a
@@ -137,7 +184,24 @@ export async function submitAssessment(courseId: string, lessonId: string, formD
     },
     update: { answers: answers as unknown as Prisma.InputJsonValue, score, total: questions.length },
   });
+  await checkCertificate(session.user.id, courseId);
+  revalidatePath(`/dashboard/courses/${courseId}`);
 
   revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
   redirect(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
+}
+
+// Creates or edits the learner's review of a course they're enrolled in.
+export async function saveCourseReview(courseId: string, formData: FormData) {
+  const session = await requireUser();
+  const { saveReview } = await import("@/lib/reviews");
+  const error = await saveReview(session.user.id, courseId, formData.get("rating"), formData.get("comment"));
+  const course = await prisma.course.findUnique({ where: { id: courseId }, select: { slug: true } });
+  if (course) revalidatePath(`/courses/${course.slug}`);
+  revalidatePath(`/dashboard/courses/${courseId}`);
+  redirect(
+    `/dashboard/courses/${courseId}?` +
+      (error ? `reviewError=${encodeURIComponent(error)}` : "reviewed=1") +
+      "#review",
+  );
 }

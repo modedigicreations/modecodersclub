@@ -4,6 +4,7 @@ import { requireInstructorAccess } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { GenerateAssessmentButton, GenerateLabButton } from "@/components/ai-generate-button";
 import { deleteAssessment, deleteLab, updateLesson, upsertAssessment, upsertLab } from "../../actions";
+import { formatChecks, storedChecks } from "@/lib/lab-checks";
 
 export const instant = false;
 
@@ -90,6 +91,22 @@ export default async function EditLessonPage({
           <div>
             <label htmlFor="starterJs">Starter JS</label>
             <textarea id="starterJs" name="starterJs" defaultValue={lab?.starterJs ?? ""} style={{ minHeight: 90, fontFamily: "monospace" }} />
+          </div>
+          <div>
+            <label htmlFor="checks">Auto-grading checks (optional, one per line)</label>
+            <textarea
+              id="checks"
+              name="checks"
+              defaultValue={formatChecks(storedChecks(lab?.checks))}
+              placeholder={'html: h1 "Welcome" | Add a heading that says Welcome\nhtml: ul > li *3 | List at least three items\ncss: body { background-color } | Give the page a background colour\njs: addEventListener | Make the button respond to clicks'}
+              style={{ minHeight: 110, fontFamily: "monospace" }}
+            />
+            <p style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>
+              Learners press &ldquo;Check my work&rdquo; to see which checks pass. <code>html:</code> takes a CSS selector, with an
+              optional <code>*N</code> minimum count and <code>&quot;text&quot;</code> to look for; <code>css:</code> takes{" "}
+              <code>selector {"{ property }"}</code> or <code>selector {"{ property: value }"}</code>; <code>js:</code> looks for
+              text in the JavaScript. Text after <code>|</code> is what the learner sees.
+            </p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <input id="hintsEnabled" name="hintsEnabled" type="checkbox" defaultChecked={lab?.hintsEnabled ?? false} style={{ width: "auto" }} />

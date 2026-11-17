@@ -53,3 +53,43 @@ enrolled learners get published lessons).
 - `COURSE_GENERATE_DAILY_LIMIT` (default 5) caps runs per admin per 24 hours; one run at a time per admin.
 - Runs in the background on the server; a run interrupted by a restart or deploy is marked failed after 15 minutes.
 - Tests: `npm test` (uses a fake Claude and a **throwaway** `DATABASE_URL`; it writes and deletes rows).
+
+## Subscriptions: billing page and reminder emails
+
+Learners see their status, payment history and a Subscribe/Renew button at `/dashboard/billing`. Renewing early adds the
+new period after the current one ends.
+
+A daily job emails a reminder 7 days before a subscription ends and a notice when it has ended (once each, never after
+the learner has renewed, never to school/SSO learners). Set `CRON_SECRET` (16+ random characters) and call it once a
+day, for example with a Railway cron service:
+
+```bash
+curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" https://<your-app>/api/cron/subscription-reminders
+```
+
+## Learner features
+
+- **Certificates** are issued automatically when a learner finishes every published lesson and passes every quiz
+  (`CERTIFICATE_QUIZ_PASS_PERCENT`, default 70). Needs `CERTIFICATE_SIGNING_SECRET` (32+ characters). A revoked
+  certificate is never re-issued.
+- **Self-service enrolment** from each course page: free courses are open, paid ones need an active subscription
+  (school/SSO learners are exempt).
+- **Instructor progress**: each course's instructor page lists every learner's lessons, quizzes, labs passed, last
+  activity and certificate, with a CSV download.
+- **Reviews**: learners who have finished a lesson can rate a course (1-5) and comment. Admins hide reviews at
+  `/admin/reviews`.
+- **Auto-graded labs**: instructors add one check per line in the lab form, for example
+
+  ```
+  html: h1 "Welcome" | Add a heading that says Welcome
+  html: ul > li *3 | List at least three items
+  css: body { background-color } | Give the page a background colour
+  js: addEventListener | Make the button respond to clicks
+  ```
+
+  Learners press **Check my work**; the server reads (never runs) the code. A-EduNet writes checks for the labs it
+  generates.
+- **Streaks and badges** on the learner dashboard. Days are counted in `LEARNING_TIMEZONE` (default `Africa/Lagos`).
+- **Offline handbook**: each course has a phone-friendly handbook page (`/dashboard/courses/<id>/handbook`) that
+  learners can save for offline reading; saved handbooks are listed at `/offline`. `public/sw.js` caches only
+  handbooks the learner saves, and signing out deletes them from the device.

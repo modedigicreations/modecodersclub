@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
+import { EnrolPanel } from "./enrol-panel";
 import prisma from "@/lib/prisma";
+import { getCourseRating, stars } from "@/lib/reviews";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -23,10 +26,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function CourseDetailPage({ params }: PageProps) {
+export default async function CourseDetailPage({
+  params,
+  searchParams,
+}: PageProps & { searchParams: Promise<{ error?: string }> }) {
   const { slug } = await params;
+  const { error } = await searchParams;
   const course = await prisma.course.findFirst({ where: { slug, archivedAt: null, isDraft: false } });
   if (!course) notFound();
+  const rating = await getCourseRating(course.id);
 
   return (
     <main>
@@ -42,6 +50,12 @@ export default async function CourseDetailPage({ params }: PageProps) {
             </div>
           </div>
           <p>{course.description}</p>
+          {rating.average !== null && (
+            <p className="course-rating">
+              <span aria-hidden="true">{stars(rating.average)}</span> {rating.average.toFixed(1)} out of 5 ·{" "}
+              <a href="#reviews">{rating.count} review{rating.count === 1 ? "" : "s"}</a>
+            </p>
+          )}
           <div className="course-detail-meta">
             <div>
               <p>Duration</p>
@@ -73,15 +87,30 @@ export default async function CourseDetailPage({ params }: PageProps) {
             ))}
           </ul>
 
-          <div className="course-detail-cta">
-            <p>
-              Ready to start, or still have questions? We&rsquo;re happy to talk
-              you through what the {course.name} path involves.
-            </p>
-            <Link className="button button-primary" href="/contact">
-              Ask about this course <span aria-hidden="true">↗</span>
-            </Link>
-          </div>
+          {error && <p className="auth-error" style={{ marginTop: 24 }}>{error}</p>}
+          <Suspense fallback={<div className="course-detail-cta"><p>Loading enrolment options…</p></div>}>
+            <EnrolPanel courseId={course.id} isFree={course.isFree} courseName={course.name} />
+          </Suspense>
+          <p style={{ marginTop: 16, color: "var(--muted)" }}>
+            Still have questions? <Link className="text-link" href="/contact">Ask about this course</Link>.
+          </p>
+
+          {rating.reviews.length > 0 && (
+            <div id="reviews" style={{ marginTop: 48 }}>
+              <h2 style={{ fontSize: 22, marginBottom: 16 }}>What learners say</h2>
+              <ul className="review-list">
+                {rating.reviews.map((r) => (
+                  <li key={r.id}>
+                    <p>
+                      <span className="review-stars" aria-label={`${r.rating} out of 5 stars`}>{stars(r.rating)}</span>{" "}
+                      <strong>{r.author}</strong>
+                    </p>
+                    {r.comment && <p>{r.comment}</p>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <p style={{ marginTop: 40 }}>
             <Link className="text-link text-link-back" href="/courses">

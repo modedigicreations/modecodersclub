@@ -16,13 +16,16 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: RouteContext) {
   const session = await getSession();
-  if (!session || session.user.role !== "admin") {
-    return NextResponse.json({ error: "Admin sign-in is required." }, { status: 401 });
+  if (!session) {
+    return NextResponse.json({ error: "Sign-in is required." }, { status: 401 });
   }
 
   const { id } = await params;
   const certificate = await prisma.certificate.findUnique({ where: { id } });
-  if (!certificate) {
+  // Admins can download any certificate; a learner only their own, current one.
+  const isAdmin = session.user.role === "admin";
+  const isOwner = certificate?.userId === session.user.id && certificate.status === "ACTIVE";
+  if (!certificate || (!isAdmin && !isOwner)) {
     return NextResponse.json({ error: "Certificate not found." }, { status: 404 });
   }
 

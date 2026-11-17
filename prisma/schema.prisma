@@ -26,6 +26,7 @@ model User {
   accounts Account[]
 
   issuedCertificates  Certificate[]  @relation("CertificateIssuer")
+  certificates        Certificate[]  @relation("CertificateRecipient")
   revokedCertificates Certificate[]  @relation("CertificateRevoker")
   createdForumSessions ForumSession[] @relation("ForumSessionCreator")
   forumPosts          ForumPost[]
@@ -43,6 +44,9 @@ model User {
   subscriptions   Subscription[]
 
   courseGenerationJobs CourseGenerationJob[]
+  courseReviews        CourseReview[]
+  learningDays         LearningDay[]
+  badges               UserBadge[]
 
   @@map("user")
 }
@@ -126,6 +130,8 @@ model Course {
   instructors    CourseInstructor[]
   enrollments    Enrollment[]
   generationJobs CourseGenerationJob[]
+  certificates   Certificate[]
+  reviews        CourseReview[]
 
   @@index([order])
 }
@@ -147,7 +153,9 @@ model FreeResource {
   @@index([order])
 }
 
-// Admin-issued completion certificates (see src/lib/certificate-verification.ts).
+// Completion certificates (see src/lib/certificate-verification.ts).
+// Admin-issued ones have issuedById; automatic ones (src/lib/course-completion.ts)
+// have issuedById null and are linked to the learner (userId) and course (courseId).
 model Certificate {
   id                String            @id @default(cuid())
   certificateNumber String            @unique @db.VarChar(40)
@@ -155,14 +163,19 @@ model Certificate {
   courseName        String            @db.VarChar(120)
   status            CertificateStatus @default(ACTIVE)
   issuedAt          DateTime          @default(now())
-  issuedById        String
-  issuedBy          User              @relation("CertificateIssuer", fields: [issuedById], references: [id])
+  issuedById        String?
+  issuedBy          User?             @relation("CertificateIssuer", fields: [issuedById], references: [id], onDelete: SetNull)
+  userId            String?
+  user              User?             @relation("CertificateRecipient", fields: [userId], references: [id], onDelete: SetNull)
+  courseId          String?
+  course            Course?           @relation(fields: [courseId], references: [id], onDelete: SetNull)
   revokedAt         DateTime?
   revokedById       String?
   revokedBy         User?             @relation("CertificateRevoker", fields: [revokedById], references: [id], onDelete: SetNull)
   revocationReason  String?           @db.VarChar(1000)
 
   @@index([issuedAt])
+  @@index([userId, courseId])
 }
 
 // Weekly community discussion sessions ("Community" nav).
@@ -228,6 +241,8 @@ model Lab {
   starterCss   String   @db.VarChar(4000) @default("")
   starterJs    String   @db.VarChar(4000) @default("")
   hintsEnabled Boolean  @default(false)
+  // Auto-grading checks (see src/lib/lab-checks.ts), e.g. ["html: h1 | Add a heading"].
+  checks       Json     @default("[]")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -243,6 +258,11 @@ model LabSubmission {
   html      String   @db.VarChar(4000) @default("")
   css       String   @db.VarChar(4000) @default("")
   js        String   @db.VarChar(4000) @default("")
+  // Last "Check my work" result; passedAt is set the first time every check passes.
+  checksPassed Int       @default(0)
+  checksTotal  Int       @default(0)
+  checkedAt    DateTime?
+  passedAt     DateTime?
   updatedAt DateTime @updatedAt
 
   @@unique([labId, userId])
@@ -327,6 +347,9 @@ model Subscription {
   paystackReference String   @unique @db.VarChar(100)
   amountKobo        Int
   createdAt         DateTime @default(now())
+  // Set when the "expires in 7 days" / "has expired" emails go out (once each).
+  reminderSentAt      DateTime?
+  expiredNoticeSentAt DateTime?
 
   @@index([userId, expiresAt])
 }
@@ -362,4 +385,42 @@ model CourseGenerationJob {
 
   @@index([createdById, createdAt])
   @@index([status])
+}
+
+// A learner's rating (1-5) and optional comment for a course they're taking.
+// One per learner per course (editable). Admins can hide a review (hiddenAt).
+model CourseReview {
+  id        String    @id @default(cuid())
+  courseId  String
+  course    Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?   @db.VarChar(1000)
+  hiddenAt  DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([courseId, userId])
+  @@index([courseId, hiddenAt])
+}
+
+// One row per learner per day they did something (finished a lesson, took a
+// quiz, checked a lab), in LEARNING_TIMEZONE. Streaks are worked out from these.
+model LearningDay {
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day    DateTime @db.Date
+
+  @@id([userId, day])
+}
+
+// Badges a learner has earned; the badge list itself is in src/lib/achievements.ts.
+model UserBadge {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge     String   @db.VarChar(40)
+  awardedAt DateTime @default(now())
+
+  @@id([userId, badge])
 }

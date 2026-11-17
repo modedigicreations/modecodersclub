@@ -1,0 +1,365 @@
+// Learner-facing features (throwaway DATABASE_URL: writes and deletes rows).
+import "dotenv/config";
+import { after, before, describe, test } from "node:test";
+import assert from "node:assert/strict";
+import prisma from "@/lib/prisma";
+import { computeProgress, issueCertificateIfComplete } from "@/lib/course-completion";
+import { checkEnrolment, enrol } from "@/lib/enrolment";
+import { runSubscriptionReminders } from "@/lib/subscription-reminders";
+import { csvCell, getCourseLearnerProgress, progressCsv } from "@/lib/learner-progress";
+import { getCourseRating, publicName, saveReview } from "@/lib/reviews";
+import { formatChecks, gradeLab, parseChecks } from "@/lib/lab-checks";
+import { recordLabCheck } from "@/lib/lab-submissions";
+import { contentBlocks } from "@/lib/course-handbook";
+import { computeStreaks, getAchievements, localDay, recordLearning } from "@/lib/achievements";
+
+if (/railway|rlwy|amazonaws|supabase|neon\.tech/i.test(process.env.DATABASE_URL ?? "")) {
+  throw new Error("DATABASE_URL looks like a hosted database; refusing to run tests that write data.");
+}
+
+const P = "test-features";
+export const ids = {
+  learner: `${P}-learner`,
+  admin: `${P}-admin`,
+  course: `${P}-course`,
+};
+
+export async function seedCourse() {
+  await prisma.user.upsert({ where: { id: ids.learner }, update: {}, create: { id: ids.learner, name: "Feature Learner", email: `${P}-learner@example.com` } });
+  await prisma.user.upsert({ where: { id: ids.admin }, update: {}, create: { id: ids.admin, name: "Feature Admin", email: `${P}-admin@example.com`, role: "admin" } });
+  await prisma.course.create({
+    data: {
+      id: ids.course, slug: `${P}-course`, name: "Feature Course", category: "Test", level: "L", description: "D",
+      icon: "</>", color: "blue", duration: "1 week", price: "Free", audience: "A", outcomes: ["O"], isFree: true,
+      lessons: {
+        create: [
+          { id: `${P}-l1`, title: "L1", content: "c", position: 1, isPublished: true,
+            assessment: { create: { id: `${P}-a1`, questions: [{ question: "q", options: ["a", "b", "c", "d"], correctIndex: 0 }, { question: "q2", options: ["a", "b", "c", "d"], correctIndex: 1 }] } } },
+          { id: `${P}-l2`, title: "L2", content: "c", position: 2, isPublished: true },
+          { id: `${P}-l3`, title: "Draft lesson", content: "c", position: 3, isPublished: false },
+        ],
+      },
+    },
+  });
+  return prisma.enrollment.create({ data: { courseId: ids.course, userId: ids.learner, enrolledById: ids.admin } });
+}
+
+export async function cleanup() {
+  await prisma.certificate.deleteMany({ where: { OR: [{ userId: ids.learner }, { courseId: ids.course }] } });
+  await prisma.subscription.deleteMany({ where: { userId: { startsWith: P } } });
+  await prisma.course.deleteMany({ where: { id: { startsWith: P } } });
+  await prisma.user.deleteMany({ where: { id: { startsWith: P } } });
+}
+
+async function paidCourse(id: string, extra: { isDraft?: boolean; archivedAt?: Date } = {}) {
+  return prisma.course.create({
+    data: {
+      id, slug: id, name: id, category: "T", level: "L", description: "D", icon: "x", color: "blue",
+      duration: "d", price: "p", audience: "a", outcomes: ["o"], isFree: false, ...extra,
+    },
+  });
+}
+
+before(async () => {
+  await cleanup();
+});
+after(async () => {
+  await cleanup();
+  await prisma.$disconnect();
+});
+
+describe("F1 automatic certificates", () => {
+  test("progress counts only published lessons and needs every quiz passed", () => {
+    const base = {
+      publishedLessonIds: ["a", "b"],
+      quizLessonIds: ["a", "draft"],
+      completedLessonIds: ["a", "b", "draft"],
+      passPercent: 70,
+    };
+    assert.equal(computeProgress({ ...base, quizScores: new Map() }).complete, false, "quiz not taken");
+    assert.equal(computeProgress({ ...base, quizScores: new Map([["a", { score: 1, total: 2 }]]) }).complete, false, "50% < 70%");
+    const done = computeProgress({ ...base, quizScores: new Map([["a", { score: 2, total: 2 }]]) });
+    assert.equal(done.complete, true);
+    assert.equal(done.completedLessons, 2, "the unpublished lesson's progress doesn't count");
+    assert.equal(done.quizzesTotal, 1, "the unpublished lesson's quiz isn't required");
+    assert.equal(computeProgress({ ...base, publishedLessonIds: [], quizScores: new Map() }).complete, false, "empty course");
+  });
+
+  test("issued once when the course is finished; never twice; not re-issued after revocation", async () => {
+    const enrollment = await seedCourse();
+    assert.equal(await issueCertificateIfComplete(ids.learner, ids.course), null, "nothing done yet");
+
+    for (const lessonId of [`${P}-l1`, `${P}-l2`]) {
+      await prisma.lessonProgress.create({ data: { enrollmentId: enrollment.id, lessonId } });
+    }
+    await prisma.assessmentAttempt.create({ data: { assessmentId: `${P}-a1`, userId: ids.learner, answers: [0, 0], score: 1, total: 2 } });
+    assert.equal(await issueCertificateIfComplete(ids.learner, ids.course), null, "quiz at 50% isn't a pass");
+
+    await prisma.assessmentAttempt.update({
+      where: { assessmentId_userId: { assessmentId: `${P}-a1`, userId: ids.learner } },
+      data: { answers: [0, 1], score: 2 },
+    });
+    const results = await Promise.all([1, 2, 3].map(() => issueCertificateIfComplete(ids.learner, ids.course)));
+    assert.equal(results.filter(Boolean).length, 1, "three simultaneous completions issue one certificate");
+    const cert = results.find(Boolean)!;
+    assert.equal(cert.recipientName, "Feature Learner");
+    assert.equal(cert.courseName, "Feature Course");
+    assert.equal(cert.issuedById, null);
+    assert.match(cert.certificateNumber, /^MCC-\d{4}-[0-9A-F]{12}$/);
+
+    await prisma.certificate.update({ where: { id: cert.id }, data: { status: "REVOKED", revokedAt: new Date(), revocationReason: "test" } });
+    assert.equal(await issueCertificateIfComplete(ids.learner, ids.course), null, "an admin's revocation sticks");
+    assert.equal(await prisma.certificate.count({ where: { userId: ids.learner, courseId: ids.course } }), 1);
+  });
+});
+
+describe("F2 self-service enrolment", () => {
+  test("free/paid/draft/archived/admin/school rules, and enrolling twice is harmless", async () => {
+    const learner = `${P}-enrol-learner`;
+    const school = `${P}-enrol-school`;
+    await prisma.user.create({ data: { id: learner, name: "Enrol Learner", email: `${learner}@example.com` } });
+    await prisma.user.create({ data: { id: school, name: "School Learner", email: `${school}@example.com`, isEnterpriseSso: true } });
+    const paid = await paidCourse(`${P}-paid`);
+    const draft = await paidCourse(`${P}-draft`, { isDraft: true });
+    const archived = await paidCourse(`${P}-archived`, { archivedAt: new Date() });
+
+    assert.deepEqual(await checkEnrolment(learner, ids.course), { ok: true }, "free course is open");
+    assert.equal((await checkEnrolment(learner, paid.id) as { reason: string }).reason, "needs_subscription");
+    assert.equal((await checkEnrolment(school, paid.id)).ok, true, "school (SSO) learners don't need a subscription");
+    assert.equal((await checkEnrolment(learner, draft.id) as { reason: string }).reason, "not_open");
+    assert.equal((await checkEnrolment(learner, archived.id) as { reason: string }).reason, "not_open");
+    assert.equal((await checkEnrolment(ids.admin, ids.course) as { reason: string }).reason, "admin");
+
+    await prisma.subscription.create({
+      data: { userId: learner, paystackReference: `mcc-sub-${learner}`, amountKobo: 500000, expiresAt: new Date(Date.now() + 86_400_000) },
+    });
+    const first = await enrol(learner, paid.id, learner);
+    assert.equal(first.ok && first.created, true, "subscribed learner can enrol in a paid course");
+    const again = await enrol(learner, paid.id, learner);
+    assert.equal(again.ok && again.created, false);
+    assert.equal(await prisma.enrollment.count({ where: { userId: learner, courseId: paid.id } }), 1);
+  });
+});
+
+describe("F3 subscription reminders", () => {
+  test("7-day reminder and expiry notice, once each; not after a renewal; not for old or school subscriptions", async () => {
+    const day = 86_400_000;
+    const now = new Date();
+    const mk = async (key: string, endsInDays: number[], sso = false) => {
+      const id = `${P}-rem-${key}`;
+      await prisma.user.create({ data: { id, name: key, email: `${id}@example.com`, isEnterpriseSso: sso } });
+      for (const [i, d] of endsInDays.entries()) {
+        await prisma.subscription.create({
+          data: { userId: id, paystackReference: `mcc-sub-${id}-${i}`, amountKobo: 500000, expiresAt: new Date(now.getTime() + d * day) },
+        });
+      }
+      return id;
+    };
+    const soon = await mk("soon", [5]);
+    const renewed = await mk("renewed", [5, 187]);
+    const ended = await mk("ended", [-1]);
+    const old = await mk("old", [-10]);
+    const school = await mk("school", [5], true);
+
+    // Other rows from earlier tests may exist; look only at ours.
+    await runSubscriptionReminders(now);
+    const row = (u: string) => prisma.subscription.findFirstOrThrow({ where: { userId: u }, orderBy: { expiresAt: "desc" } });
+    assert.ok((await row(soon)).reminderSentAt, "reminder sent 5 days before the end");
+    assert.equal((await row(renewed)).reminderSentAt, null, "renewed: the latest period ends in 187 days");
+    assert.equal((await prisma.subscription.findFirstOrThrow({ where: { userId: renewed }, orderBy: { expiresAt: "asc" } })).reminderSentAt, null);
+    const e = await row(ended);
+    assert.ok(e.expiredNoticeSentAt, "expiry notice sent");
+    assert.equal(e.status, "expired");
+    assert.equal((await row(old)).expiredNoticeSentAt, null, "subscriptions that ended long ago are left alone");
+    assert.equal((await row(school)).reminderSentAt, null, "school (SSO) learners don't get billing emails");
+
+    const firstSoon = (await row(soon)).reminderSentAt!.getTime();
+    const second = await runSubscriptionReminders(new Date(now.getTime() + 60_000));
+    assert.equal((await row(soon)).reminderSentAt!.getTime(), firstSoon, "not sent twice");
+    assert.equal(second.reminders, 0);
+    assert.equal(second.expired, 0);
+  });
+});
+
+describe("F4 instructor progress", () => {
+  test("per-learner progress from published lessons, quizzes and labs; CSV is formula-safe", async () => {
+    // Uses the F1 course: the learner finished both published lessons and passed the quiz;
+    // the certificate was revoked in that test, so none is shown.
+    const formulaName = `${P}-formula`;
+    await prisma.user.create({ data: { id: formulaName, name: "=HYPERLINK(\"http://evil\")", email: `${formulaName}@example.com` } });
+    await prisma.enrollment.create({ data: { courseId: ids.course, userId: formulaName, enrolledById: ids.admin } });
+
+    const rows = await getCourseLearnerProgress(ids.course);
+    const learner = rows.find((r) => r.userId === ids.learner)!;
+    assert.equal(learner.totalLessons, 2, "the draft lesson isn't counted");
+    assert.equal(learner.lessonsDone, 2);
+    assert.equal(learner.percent, 100);
+    assert.equal(learner.quizzesPassed, 1);
+    assert.equal(learner.quizAverage, 100);
+    assert.equal(learner.certificateNumber, null, "revoked certificates aren't shown");
+    assert.ok(learner.lastActivity);
+    const fresh = rows.find((r) => r.userId === formulaName)!;
+    assert.equal(fresh.lessonsDone, 0);
+    assert.equal(fresh.quizAverage, null);
+
+    const csv = progressCsv(rows);
+    assert.ok(csv.startsWith('"Name","Email","School access (SSO)"'));
+    assert.ok(csv.includes(`"'=HYPERLINK(""http://evil"")"`), "formula neutralised and quotes escaped");
+    assert.equal(csvCell("-1+2"), `"'-1+2"`);
+    assert.equal(csvCell("plain"), `"plain"`);
+  });
+});
+
+describe("F5 course reviews", () => {
+  test("only learners with progress can review; one editable review each; hidden ones don't count", async () => {
+    // F1 learner has finished lessons; a fresh enrolment and a stranger can't review.
+    const fresh = `${P}-review-fresh`;
+    const other = `${P}-review-other`;
+    await prisma.user.create({ data: { id: fresh, name: "Fresh", email: `${fresh}@example.com` } });
+    await prisma.user.create({ data: { id: other, name: "Other Person Name", email: `${other}@example.com` } });
+    await prisma.enrollment.create({ data: { courseId: ids.course, userId: fresh, enrolledById: ids.admin } });
+    const otherEnrol = await prisma.enrollment.create({ data: { courseId: ids.course, userId: other, enrolledById: ids.admin } });
+    await prisma.lessonProgress.create({ data: { enrollmentId: otherEnrol.id, lessonId: `${P}-l1` } });
+
+    assert.match((await saveReview(fresh, ids.course, 5, ""))!, /Complete at least one lesson/);
+    assert.match((await saveReview(`${P}-nobody`, ids.course, 5, ""))!, /Complete at least one lesson/);
+    assert.match((await saveReview(ids.learner, ids.course, 6, ""))!, /1 to 5/);
+    assert.match((await saveReview(ids.learner, ids.course, "4.5", ""))!, /1 to 5/);
+    assert.match((await saveReview(ids.learner, ids.course, 4, "x".repeat(1001)))!, /under 1000/);
+
+    assert.equal(await saveReview(ids.learner, ids.course, "2", "  Meh  "), null);
+    assert.equal(await saveReview(ids.learner, ids.course, 5, "Great course"), null, "editing replaces it");
+    assert.equal(await saveReview(other, ids.course, 4, ""), null);
+    assert.equal(await prisma.courseReview.count({ where: { courseId: ids.course } }), 2);
+
+    let rating = await getCourseRating(ids.course);
+    assert.equal(rating.average, 4.5);
+    assert.equal(rating.count, 2);
+    const mine = rating.reviews.find((r) => r.comment === "Great course")!;
+    assert.equal(mine.author, "Feature L.", "public pages show first name and last initial");
+    assert.equal(rating.reviews.find((r) => r.rating === 4)!.comment, null, "empty comment stored as null");
+
+    await prisma.courseReview.updateMany({ where: { userId: other }, data: { hiddenAt: new Date() } });
+    rating = await getCourseRating(ids.course);
+    assert.equal(rating.average, 5);
+    assert.equal(rating.count, 1);
+
+    assert.equal(publicName("Ada"), "Ada");
+    assert.equal(publicName("  "), "Learner");
+  });
+});
+
+describe("F6 auto-graded labs", () => {
+  const source = [
+    'html: h1 "Welcome" | Add a Welcome heading',
+    "html: ul > li *3",
+    "css: body { background-color }",
+    "css: .card h2 { color: RED } | Make card titles red",
+    "js: addEventListener",
+    "# comments are ignored",
+  ].join("\n");
+
+  test("parses the check format and rejects bad lines", () => {
+    const { checks, errors } = parseChecks(source);
+    assert.deepEqual(errors, []);
+    assert.equal(checks.length, 5);
+    assert.deepEqual(checks[1], { kind: "html", selector: "ul > li", min: 3, message: "Your HTML has at least 3 ul > li elements" });
+    assert.equal(checks[3]!.message, "Make card titles red");
+    assert.deepEqual(parseChecks(formatChecks(checks)).checks, checks, "format/parse round-trip");
+
+    const bad = parseChecks("python: print\nhtml: ][\ncss: body color");
+    assert.equal(bad.checks.length, 0);
+    assert.equal(bad.errors.length, 3);
+    assert.match(bad.errors[1]!, /isn't a valid CSS selector/);
+    assert.equal(parseChecks(Array(25).fill("js: x").join("\n")).checks.length, 20, "capped at 20");
+  });
+
+  test("grades HTML, CSS and JS statically", () => {
+    const { checks } = parseChecks(source);
+    const starter = { html: "<h1>Hi</h1><ul><li>a</li></ul>", css: "", js: "// addEventListener later" };
+    assert.deepEqual(gradeLab(checks, starter).map((r) => r.passed), [false, false, false, false, false], "comments don't count");
+
+    const done = {
+      html: "<h1>  welcome   home</h1><ul><li>a</li><li>b</li><li>c</li></ul><div class='card'><h2>x</h2></div>",
+      css: "/* body { background-color: x } */ @media (min-width: 1px) { body { margin: 0; background-color: #fff } }\n.card   h2, p { color: red; }",
+      js: "document.querySelector('button').addEventListener('click', () => {});",
+    };
+    assert.deepEqual(gradeLab(checks, done).map((r) => r.passed), [true, true, true, true, true]);
+    assert.deepEqual(gradeLab(checks, { ...done, css: ".card h2 { color: blue }" }).map((r) => r.passed).slice(2, 4), [false, false]);
+  });
+
+  test("checking work records the first full pass, and a later failing check doesn't undo it", async () => {
+    const { checks } = parseChecks("html: p\ncss: p { color }");
+    const lab = await prisma.lab.create({ data: { lessonId: `${P}-l2`, instructions: "Add a paragraph", checks } });
+    const row = () => prisma.labSubmission.findUniqueOrThrow({ where: { labId_userId: { labId: lab.id, userId: ids.learner } } });
+
+    const half = await recordLabCheck(lab.id, ids.learner, { html: "<p>x</p>", css: "", js: "" });
+    assert.deepEqual(half!.results.map((r) => r.passed), [true, false]);
+    assert.equal(half!.passed, false);
+    assert.equal((await row()).passedAt, null);
+    assert.equal((await row()).checksPassed, 1);
+
+    const full = await recordLabCheck(lab.id, ids.learner, { html: "<p>x</p>", css: "p{color:red}", js: "" });
+    assert.equal(full!.passed, true);
+    const passedAt = (await row()).passedAt!;
+    assert.ok(passedAt);
+
+    await recordLabCheck(lab.id, ids.learner, { html: "", css: "", js: "" });
+    assert.equal((await row()).passedAt!.getTime(), passedAt.getTime(), "a pass sticks");
+    assert.equal((await row()).checksPassed, 0);
+
+    const rows = await getCourseLearnerProgress(ids.course);
+    const learner = rows.find((r) => r.userId === ids.learner)!;
+    assert.equal(learner.labsTotal, 1);
+    assert.equal(learner.labsPassed, 1);
+    assert.ok(progressCsv(rows).split("\n")[0]!.includes('"Labs passed"'));
+
+    const noChecks = await prisma.lab.create({ data: { lessonId: `${P}-l1`, instructions: "Free play" } });
+    assert.equal(await recordLabCheck(noChecks.id, ids.learner, { html: "", css: "", js: "" }), null, "labs without checks aren't graded");
+  });
+});
+
+describe("F7 streaks and badges", () => {
+  test("streak maths", () => {
+    assert.deepEqual(computeStreaks([], "2026-11-18"), { current: 0, longest: 0 });
+    const days = ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04", "2026-11-10", "2026-11-16", "2026-11-17", "2026-11-17"];
+    assert.deepEqual(computeStreaks(days, "2026-11-17"), { current: 2, longest: 4 });
+    assert.deepEqual(computeStreaks(days, "2026-11-18"), { current: 2, longest: 4 }, "yesterday still counts");
+    assert.deepEqual(computeStreaks(days, "2026-11-19"), { current: 0, longest: 4 }, "a missed day breaks it");
+    assert.deepEqual(computeStreaks(["2026-02-28", "2026-03-01"], "2026-03-01").current, 2, "across month ends");
+    assert.equal(localDay(new Date("2026-11-17T23:30:00Z"), "Africa/Lagos"), "2026-11-18", "Lagos is UTC+1");
+  });
+
+  test("activity builds a streak and awards badges once", async () => {
+    // The F1 learner finished lessons, passed the quiz 2/2 and passed a lab (F6); its certificate was revoked.
+    const start = new Date("2026-11-10T09:00:00Z");
+    const first = await recordLearning(ids.learner, start);
+    assert.deepEqual(first.sort(), ["first-lesson", "lab-pass", "quiz-ace", "quiz-pass"]);
+    assert.deepEqual(await recordLearning(ids.learner, start), [], "same day: nothing new");
+
+    await recordLearning(ids.learner, new Date("2026-11-11T09:00:00Z"));
+    const third = await recordLearning(ids.learner, new Date("2026-11-12T22:30:00Z")); // 23:30 in Lagos
+    assert.deepEqual(third, ["streak-3"]);
+
+    const later = await getAchievements(ids.learner, new Date("2026-11-13T12:00:00Z"));
+    assert.equal(later.current, 3);
+    assert.equal(later.activeToday, false);
+    assert.equal(later.badges.filter((b) => b.awardedAt).length, 5);
+    assert.equal(later.badges.find((b) => b.key === "course-complete")!.awardedAt, null, "revoked certificate doesn't count");
+
+    const gone = await getAchievements(ids.learner, new Date("2026-11-20T12:00:00Z"));
+    assert.equal(gone.current, 0);
+    assert.equal(gone.longest, 3);
+    assert.ok(gone.badges.find((b) => b.key === "streak-3")!.awardedAt, "badges are kept");
+  });
+});
+
+describe("F8 offline handbook", () => {
+  test("lesson text splits into prose and indented code, as in the PDF", () => {
+    assert.deepEqual(contentBlocks("Intro line\r\nmore\n    <h1>Hi</h1>\n\tconsole.log(1)\nAfter"), [
+      { code: false, text: "Intro line\nmore" },
+      { code: true, text: "<h1>Hi</h1>\nconsole.log(1)" },
+      { code: false, text: "After" },
+    ]);
+  });
+});

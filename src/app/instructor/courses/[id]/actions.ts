@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { requireAdmin, requireInstructorAccess } from "@/lib/session";
 import prisma from "@/lib/prisma";
-import { hasActiveSubscription } from "@/lib/subscriptions";
+import { enrol } from "@/lib/enrolment";
 import { toEmbedUrl } from "@/lib/video-embed";
+import { parseChecks } from "@/lib/lab-checks";
 
 function isRedirectError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "digest" in error &&
@@ -107,30 +108,26 @@ export async function enrollStudent(courseId: string, formData: FormData) {
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
     if (!email) throw new Error("Enter the learner's email.");
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ where: { email }, select: { id: true, name: true } });
     if (!user) throw new Error(`No account found for ${email}. They need to register first.`);
-    if (user.role === "admin") throw new Error("Admin accounts can't be enrolled as a student.");
-
-    const course = await prisma.course.findUnique({ where: { id: courseId }, select: { isFree: true, isDraft: true } });
-    if (!course) throw new Error("Course not found.");
-    if (course.isDraft) throw new Error("This course is still a draft. Publish it from Admin → Courses before enrolling learners.");
-    if (!course.isFree && !user.isEnterpriseSso) {
-      const subscribed = await hasActiveSubscription(user.id);
-      if (!subscribed) {
-        throw new Error(
-          `${user.name} doesn't have an active subscription yet — this course requires one. Ask them to subscribe from their dashboard first.`,
-        );
-      }
-    }
 
     const existing = await prisma.enrollment.findUnique({
       where: { courseId_userId: { courseId, userId: user.id } },
     });
     if (existing) throw new Error(`${user.name} is already enrolled in this course.`);
 
-    await prisma.enrollment.create({
-      data: { courseId, userId: user.id, enrolledById: session.user.id },
-    });
+    // Same rules as self-enrolment (src/lib/enrolment.ts): live course, not an
+    // admin, and a subscription (or school access) for paid courses.
+    const result = await enrol(user.id, courseId, session.user.id);
+    if (!result.ok) {
+      throw new Error(
+        result.reason === "needs_subscription"
+          ? `${result.message} Ask them to subscribe from their dashboard first.`
+          : result.reason === "not_open"
+            ? "This course is still a draft or archived. Publish it before enrolling learners."
+            : result.message,
+      );
+    }
   } catch (error) {
     if (isRedirectError(error)) throw error;
     errorRedirect(`/instructor/courses/${courseId}`, error);
@@ -195,13 +192,12 @@ export async function upsertLab(courseId: string, lessonId: string, formData: Fo
     if ([instructions, starterHtml, starterCss, starterJs].some((v) => v.length > MAX_LAB_FIELD)) {
       throw new Error(`Each lab field can be up to ${MAX_LAB_FIELD} characters.`);
     }
+    const { checks, errors } = parseChecks(String(formData.get("checks") ?? "").slice(0, 10_000));
+    if (errors.length) throw new Error(errors.slice(0, 3).join(" "));
     await assertLessonInCourse(courseId, lessonId);
 
-    await prisma.lab.upsert({
-      where: { lessonId },
-      create: { lessonId, instructions, starterHtml, starterCss, starterJs, hintsEnabled },
-      update: { instructions, starterHtml, starterCss, starterJs, hintsEnabled },
-    });
+    const data = { instructions, starterHtml, starterCss, starterJs, hintsEnabled, checks };
+    await prisma.lab.upsert({ where: { lessonId }, create: { lessonId, ...data }, update: data });
   } catch (error) {
     if (isRedirectError(error)) throw error;
     errorRedirect(`/instructor/courses/${courseId}/lessons/${lessonId}`, error);
