@@ -6,6 +6,7 @@ import prisma from "@/lib/prisma";
 import { computeProgress, issueCertificateIfComplete } from "@/lib/course-completion";
 import { checkEnrolment, enrol } from "@/lib/enrolment";
 import { runSubscriptionReminders } from "@/lib/subscription-reminders";
+import { csvCell, getCourseLearnerProgress, progressCsv } from "@/lib/learner-progress";
 
 if (/railway|rlwy|amazonaws|supabase|neon\.tech/i.test(process.env.DATABASE_URL ?? "")) {
   throw new Error("DATABASE_URL looks like a hosted database; refusing to run tests that write data.");
@@ -172,6 +173,35 @@ describe("F3 subscription reminders", () => {
     assert.equal((await row(soon)).reminderSentAt!.getTime(), firstSoon, "not sent twice");
     assert.equal(second.reminders, 0);
     assert.equal(second.expired, 0);
+  });
+});
+
+describe("F4 instructor progress", () => {
+  test("per-learner progress from published lessons, quizzes and labs; CSV is formula-safe", async () => {
+    // Uses the F1 course: the learner finished both published lessons and passed the quiz;
+    // the certificate was revoked in that test, so none is shown.
+    const formulaName = `${P}-formula`;
+    await prisma.user.create({ data: { id: formulaName, name: "=HYPERLINK(\"http://evil\")", email: `${formulaName}@example.com` } });
+    await prisma.enrollment.create({ data: { courseId: ids.course, userId: formulaName, enrolledById: ids.admin } });
+
+    const rows = await getCourseLearnerProgress(ids.course);
+    const learner = rows.find((r) => r.userId === ids.learner)!;
+    assert.equal(learner.totalLessons, 2, "the draft lesson isn't counted");
+    assert.equal(learner.lessonsDone, 2);
+    assert.equal(learner.percent, 100);
+    assert.equal(learner.quizzesPassed, 1);
+    assert.equal(learner.quizAverage, 100);
+    assert.equal(learner.certificateNumber, null, "revoked certificates aren't shown");
+    assert.ok(learner.lastActivity);
+    const fresh = rows.find((r) => r.userId === formulaName)!;
+    assert.equal(fresh.lessonsDone, 0);
+    assert.equal(fresh.quizAverage, null);
+
+    const csv = progressCsv(rows);
+    assert.ok(csv.startsWith('"Name","Email","School access (SSO)"'));
+    assert.ok(csv.includes(`"'=HYPERLINK(""http://evil"")"`), "formula neutralised and quotes escaped");
+    assert.equal(csvCell("-1+2"), `"'-1+2"`);
+    assert.equal(csvCell("plain"), `"plain"`);
   });
 });
 
