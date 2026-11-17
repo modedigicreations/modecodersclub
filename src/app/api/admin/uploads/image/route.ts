@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { IMAGE_MAX_BYTES, r2Configured, sniffImage, uploadImage } from "@/lib/r2";
+import { IMAGE_MAX_BYTES, explainR2Error, r2Configured, sniffImage, uploadImage } from "@/lib/r2";
 
 /** Same-site requests only (the upload comes from the admin editor). */
 function sameOrigin(request: Request) {
@@ -42,7 +42,9 @@ export async function POST(request: Request) {
     const url = await uploadImage(bytes, "blog");
     return NextResponse.json({ url });
   } catch (error) {
-    console.error("[uploads] R2 upload failed:", error instanceof Error ? error.message : error);
-    return NextResponse.json({ error: "The upload failed. Try again." }, { status: 502 });
+    const reason = explainR2Error(error);
+    const e = error as { name?: string; message?: string };
+    console.error("[uploads] R2 upload failed:", e?.name, e?.message);
+    return NextResponse.json({ error: `The upload failed. ${reason}` }, { status: 502 });
   }
 }
