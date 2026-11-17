@@ -92,3 +92,22 @@ test("image uploads: only real JPG/PNG/WebP/GIF bytes are accepted", async () =>
   assert.equal(sniffImage(pad([...Buffer.from("<html><script>")])), null);
   assert.equal(sniffImage(new Uint8Array([0xff, 0xd8])), null, "too short");
 });
+
+test("R2 errors are explained to the admin without secrets", async () => {
+  const { explainR2Error } = await import("@/lib/r2");
+  process.env.R2_BUCKET_NAME = "my-bucket";
+  process.env.R2_SECRET_ACCESS_KEY = "super-secret-value";
+  const cases: [unknown, RegExp][] = [
+    [{ name: "InvalidAccessKeyId" }, /R2_ACCESS_KEY_ID/],
+    [{ name: "SignatureDoesNotMatch" }, /R2_SECRET_ACCESS_KEY/],
+    [{ name: "NoSuchBucket" }, /"my-bucket"/],
+    [{ name: "AccessDenied" }, /Read & Write/],
+    [{ code: "ENOTFOUND" }, /R2_ACCOUNT_ID/],
+    [{ name: "Unknown", $metadata: { httpStatusCode: 403 } }, /credentials/],
+  ];
+  for (const [err, re] of cases) {
+    const msg = explainR2Error(err);
+    assert.match(msg, re);
+    assert.ok(!msg.includes("super-secret-value"));
+  }
+});
