@@ -3644,3 +3644,29 @@ p {
     transition: none;
   }
 }
+
+.blog-editor-preview,
+.cover-field-preview {
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 12px;
+  object-fit: contain;
+  justify-self: start;
+  border: 1px solid var(--line);
+}
+.cover-field {
+  display: grid;
+  gap: 10px;
+}
+.cover-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.blog-editor-inline-error {
+  margin: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+}

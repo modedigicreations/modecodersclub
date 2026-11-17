@@ -93,3 +93,18 @@ curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" https://<your-app>/api
 - **Offline handbook**: each course has a phone-friendly handbook page (`/dashboard/courses/<id>/handbook`) that
   learners can save for offline reading; saved handbooks are listed at `/offline`. `public/sw.js` caches only
   handbooks the learner saves, and signing out deletes them from the device.
+
+## Blog and image uploads
+
+Admins write posts at **Admin → Blog**. Images (in the editor, pasted, dropped, or as a cover) are uploaded to
+Cloudflare R2. Set the same variables modecbt uses:
+
+| Variable | What it is |
+| --- | --- |
+| `R2_ACCOUNT_ID` | Cloudflare account ID |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | An R2 API token with Object Read & Write on the bucket |
+| `R2_BUCKET_NAME` | The bucket (files go under `blog/YYYY/MM/`) |
+| `R2_PUBLIC_URL` | The bucket's public address (r2.dev or a custom domain), no trailing slash |
+
+Only JPG, PNG, WebP and GIF up to 5 MB are accepted (checked from the file's bytes; SVG is refused). Until R2 is
+set, the editor shows "Image uploads aren't set up yet".
