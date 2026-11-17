@@ -7,6 +7,7 @@ import { computeProgress, issueCertificateIfComplete } from "@/lib/course-comple
 import { checkEnrolment, enrol } from "@/lib/enrolment";
 import { runSubscriptionReminders } from "@/lib/subscription-reminders";
 import { csvCell, getCourseLearnerProgress, progressCsv } from "@/lib/learner-progress";
+import { getCourseRating, publicName, saveReview } from "@/lib/reviews";
 
 if (/railway|rlwy|amazonaws|supabase|neon\.tech/i.test(process.env.DATABASE_URL ?? "")) {
   throw new Error("DATABASE_URL looks like a hosted database; refusing to run tests that write data.");
@@ -205,3 +206,41 @@ describe("F4 instructor progress", () => {
   });
 });
 
+describe("F5 course reviews", () => {
+  test("only learners with progress can review; one editable review each; hidden ones don't count", async () => {
+    // F1 learner has finished lessons; a fresh enrolment and a stranger can't review.
+    const fresh = `${P}-review-fresh`;
+    const other = `${P}-review-other`;
+    await prisma.user.create({ data: { id: fresh, name: "Fresh", email: `${fresh}@example.com` } });
+    await prisma.user.create({ data: { id: other, name: "Other Person Name", email: `${other}@example.com` } });
+    await prisma.enrollment.create({ data: { courseId: ids.course, userId: fresh, enrolledById: ids.admin } });
+    const otherEnrol = await prisma.enrollment.create({ data: { courseId: ids.course, userId: other, enrolledById: ids.admin } });
+    await prisma.lessonProgress.create({ data: { enrollmentId: otherEnrol.id, lessonId: `${P}-l1` } });
+
+    assert.match((await saveReview(fresh, ids.course, 5, ""))!, /Complete at least one lesson/);
+    assert.match((await saveReview(`${P}-nobody`, ids.course, 5, ""))!, /Complete at least one lesson/);
+    assert.match((await saveReview(ids.learner, ids.course, 6, ""))!, /1 to 5/);
+    assert.match((await saveReview(ids.learner, ids.course, "4.5", ""))!, /1 to 5/);
+    assert.match((await saveReview(ids.learner, ids.course, 4, "x".repeat(1001)))!, /under 1000/);
+
+    assert.equal(await saveReview(ids.learner, ids.course, "2", "  Meh  "), null);
+    assert.equal(await saveReview(ids.learner, ids.course, 5, "Great course"), null, "editing replaces it");
+    assert.equal(await saveReview(other, ids.course, 4, ""), null);
+    assert.equal(await prisma.courseReview.count({ where: { courseId: ids.course } }), 2);
+
+    let rating = await getCourseRating(ids.course);
+    assert.equal(rating.average, 4.5);
+    assert.equal(rating.count, 2);
+    const mine = rating.reviews.find((r) => r.comment === "Great course")!;
+    assert.equal(mine.author, "Feature L.", "public pages show first name and last initial");
+    assert.equal(rating.reviews.find((r) => r.rating === 4)!.comment, null, "empty comment stored as null");
+
+    await prisma.courseReview.updateMany({ where: { userId: other }, data: { hiddenAt: new Date() } });
+    rating = await getCourseRating(ids.course);
+    assert.equal(rating.average, 5);
+    assert.equal(rating.count, 1);
+
+    assert.equal(publicName("Ada"), "Ada");
+    assert.equal(publicName("  "), "Learner");
+  });
+});

@@ -2361,3 +2361,60 @@ p {
   border-radius: 999px;
   background: var(--green-dark);
 }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.rating-input {
+  border: 0;
+  padding: 0;
+  margin: 0 0 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.rating-input legend {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.rating-input label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #b7791f;
+}
+
+.course-rating {
+  color: inherit;
+}
+.course-rating > span,
+.review-stars {
+  color: #b7791f;
+  letter-spacing: 1px;
+}
+
+.review-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+.review-list li {
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.review-list li p + p {
+  margin-top: 6px;
+  color: var(--muted);
+}

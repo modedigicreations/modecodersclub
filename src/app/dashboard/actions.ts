@@ -152,3 +152,18 @@ export async function submitAssessment(courseId: string, lessonId: string, formD
   revalidatePath(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
   redirect(`/dashboard/courses/${courseId}/lessons/${lessonId}`);
 }
+
+// Creates or edits the learner's review of a course they're enrolled in.
+export async function saveCourseReview(courseId: string, formData: FormData) {
+  const session = await requireUser();
+  const { saveReview } = await import("@/lib/reviews");
+  const error = await saveReview(session.user.id, courseId, formData.get("rating"), formData.get("comment"));
+  const course = await prisma.course.findUnique({ where: { id: courseId }, select: { slug: true } });
+  if (course) revalidatePath(`/courses/${course.slug}`);
+  revalidatePath(`/dashboard/courses/${courseId}`);
+  redirect(
+    `/dashboard/courses/${courseId}?` +
+      (error ? `reviewError=${encodeURIComponent(error)}` : "reviewed=1") +
+      "#review",
+  );
+}

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { EnrolPanel } from "./enrol-panel";
 import prisma from "@/lib/prisma";
+import { getCourseRating, stars } from "@/lib/reviews";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -33,6 +34,7 @@ export default async function CourseDetailPage({
   const { error } = await searchParams;
   const course = await prisma.course.findFirst({ where: { slug, archivedAt: null, isDraft: false } });
   if (!course) notFound();
+  const rating = await getCourseRating(course.id);
 
   return (
     <main>
@@ -48,6 +50,12 @@ export default async function CourseDetailPage({
             </div>
           </div>
           <p>{course.description}</p>
+          {rating.average !== null && (
+            <p className="course-rating">
+              <span aria-hidden="true">{stars(rating.average)}</span> {rating.average.toFixed(1)} out of 5 ·{" "}
+              <a href="#reviews">{rating.count} review{rating.count === 1 ? "" : "s"}</a>
+            </p>
+          )}
           <div className="course-detail-meta">
             <div>
               <p>Duration</p>
@@ -86,6 +94,23 @@ export default async function CourseDetailPage({
           <p style={{ marginTop: 16, color: "var(--muted)" }}>
             Still have questions? <Link className="text-link" href="/contact">Ask about this course</Link>.
           </p>
+
+          {rating.reviews.length > 0 && (
+            <div id="reviews" style={{ marginTop: 48 }}>
+              <h2 style={{ fontSize: 22, marginBottom: 16 }}>What learners say</h2>
+              <ul className="review-list">
+                {rating.reviews.map((r) => (
+                  <li key={r.id}>
+                    <p>
+                      <span className="review-stars" aria-label={`${r.rating} out of 5 stars`}>{stars(r.rating)}</span>{" "}
+                      <strong>{r.author}</strong>
+                    </p>
+                    {r.comment && <p>{r.comment}</p>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <p style={{ marginTop: 40 }}>
             <Link className="text-link text-link-back" href="/courses">

@@ -70,7 +70,7 @@ export default async function DashboardPage({
                 <h2 style={{ fontSize: 16, marginBottom: 6 }}>Unlock paid courses</h2>
                 <p className="lesson-content" style={{ marginBottom: 0 }}>
                   Some of our courses require a Premium subscription (₦5,000 every 6 months). Subscribe,
-                  then enrol yourself in any course from the <a className="text-link" href="/courses">course catalogue</a>.
+                  then enrol yourself in any course from the <Link className="text-link" href="/courses">course catalogue</Link>.
                 </p>
               </div>
               <form action={subscribe}>
@@ -84,7 +84,7 @@ export default async function DashboardPage({
           {enrollments.length === 0 ? (
             <p className="admin-empty">
               You&rsquo;re not enrolled in anything yet.{" "}
-              <a className="text-link" href="/courses">Browse the courses</a> and press Enrol on one you like.
+              <Link className="text-link" href="/courses">Browse the courses</Link> and press Enrol on one you like.
             </p>
           ) : (
             <div className="session-grid">

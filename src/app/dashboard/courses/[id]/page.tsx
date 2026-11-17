@@ -4,11 +4,20 @@ import { requireUser } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { QUIZ_PASS_PERCENT, findCourseCertificate, getCourseProgress } from "@/lib/course-completion";
 import { createCertificateVerificationToken } from "@/lib/certificate-verification";
+import { REVIEW_COMMENT_MAX } from "@/lib/reviews";
+import { saveCourseReview } from "@/app/dashboard/actions";
 
 export const instant = false;
 
-export default async function DashboardCoursePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DashboardCoursePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ reviewError?: string; reviewed?: string }>;
+}) {
   const { id } = await params;
+  const { reviewError, reviewed } = await searchParams;
   const session = await requireUser();
 
   const enrollment = await prisma.enrollment.findUnique({
@@ -24,10 +33,12 @@ export default async function DashboardCoursePage({ params }: { params: Promise<
     prisma.lessonProgress.findMany({ where: { enrollmentId: enrollment.id } }),
   ]);
   const completedLessonIds = new Set(progress.map((p) => p.lessonId));
-  const [summary, certificate] = await Promise.all([
+  const [summary, certificate, myReview] = await Promise.all([
     getCourseProgress(session.user.id, id),
     findCourseCertificate(session.user.id, id),
+    prisma.courseReview.findUnique({ where: { courseId_userId: { courseId: id, userId: session.user.id } } }),
   ]);
+  const canReview = (summary?.completedLessons ?? 0) > 0;
   let verifyPath: string | null = null;
   if (certificate) {
     try {
@@ -119,6 +130,39 @@ export default async function DashboardCoursePage({ params }: { params: Promise<
               </tbody>
             </table>
           )}
+
+          <div id="review" className="admin-form" style={{ maxWidth: 720, marginTop: 32 }}>
+            <h2 style={{ fontSize: 16, marginBottom: 6 }}>{myReview ? "Your review" : "Rate this course"}</h2>
+            {reviewError && <p className="auth-error">{reviewError}</p>}
+            {reviewed && !reviewError && <p className="auth-success">Thanks! Your review is saved.</p>}
+            {myReview?.hiddenAt && (
+              <p style={{ color: "var(--muted)", fontSize: 13 }}>
+                An admin has hidden your review from the course page. You can still edit it.
+              </p>
+            )}
+            {canReview ? (
+              <form action={saveCourseReview.bind(null, id)}>
+                <fieldset className="rating-input">
+                  <legend>Rating</legend>
+                  {[5, 4, 3, 2, 1].map((n) => (
+                    <label key={n}>
+                      <input type="radio" name="rating" value={n} required defaultChecked={myReview?.rating === n} />
+                      {"★".repeat(n)} <span className="sr-only">{n} star{n > 1 ? "s" : ""}</span>
+                    </label>
+                  ))}
+                </fieldset>
+                <label>
+                  Comment (optional, shown with your first name and last initial)
+                  <textarea name="comment" rows={3} maxLength={REVIEW_COMMENT_MAX} defaultValue={myReview?.comment ?? ""} />
+                </label>
+                <button type="submit" className="button button-primary">
+                  {myReview ? "Update review" : "Post review"}
+                </button>
+              </form>
+            ) : (
+              <p style={{ color: "var(--muted)", fontSize: 13 }}>Complete your first lesson to rate this course.</p>
+            )}
+          </div>
 
           <p style={{ marginTop: 32 }}>
             <Link className="text-link text-link-back" href="/dashboard">
