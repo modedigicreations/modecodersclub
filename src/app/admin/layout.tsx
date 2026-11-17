@@ -17,6 +17,7 @@ const adminLinks = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/courses", label: "Courses" },
   { href: "/admin/course-generator", label: "AI course generator" },
+  { href: "/admin/blog", label: "Blog" },
   { href: "/admin/resources", label: "Free resources" },
   { href: "/admin/certificates", label: "Certificates" },
   { href: "/admin/forum", label: "Community forum" },
