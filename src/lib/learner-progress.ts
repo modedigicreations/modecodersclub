@@ -17,6 +17,8 @@ export type LearnerProgressRow = {
   /** Average score across the quizzes taken, as a percent (null if none taken). */
   quizAverage: number | null;
   labsStarted: number;
+  /** Labs where every auto-grading check has passed at least once. */
+  labsPassed: number;
   labsTotal: number;
   lastActivity: Date | null;
   certificateNumber: string | null;
@@ -53,7 +55,7 @@ export async function getCourseLearnerProgress(courseId: string): Promise<Learne
     }),
     prisma.labSubmission.findMany({
       where: { labId: { in: labIds }, userId: { in: userIds } },
-      select: { userId: true, updatedAt: true },
+      select: { userId: true, updatedAt: true, passedAt: true },
     }),
   ]);
   const certByUser = new Map(certificates.map((c) => [c.userId, c.certificateNumber]));
@@ -83,6 +85,7 @@ export async function getCourseLearnerProgress(courseId: string): Promise<Learne
       quizzesTotal: assessmentIds.length,
       quizAverage: mine.length ? Math.round((mine.reduce((s, a) => s + a.score / a.total, 0) / mine.length) * 100) : null,
       labsStarted: labs.length,
+      labsPassed: labs.filter((s) => s.passedAt).length,
       labsTotal: labIds.length,
       lastActivity: activity.length ? new Date(Math.max(...activity.map((d) => d.getTime()))) : null,
       certificateNumber: certByUser.get(uid) ?? null,
@@ -100,12 +103,12 @@ export function csvCell(value: unknown): string {
 export function progressCsv(rows: LearnerProgressRow[]): string {
   const header = [
     "Name", "Email", "School access (SSO)", "Enrolled", "Lessons done", "Lessons total", "Progress %",
-    "Quizzes passed", "Quizzes total", "Quiz average %", "Labs started", "Labs total", "Last activity", "Certificate",
+    "Quizzes passed", "Quizzes total", "Quiz average %", "Labs started", "Labs passed", "Labs total", "Last activity", "Certificate",
   ];
   const lines = rows.map((r) =>
     [
       r.name, r.email, r.isSchool ? "yes" : "no", r.enrolledAt, r.lessonsDone, r.totalLessons, r.percent,
-      r.quizzesPassed, r.quizzesTotal, r.quizAverage ?? "", r.labsStarted, r.labsTotal, r.lastActivity ?? "", r.certificateNumber ?? "",
+      r.quizzesPassed, r.quizzesTotal, r.quizAverage ?? "", r.labsStarted, r.labsPassed, r.labsTotal, r.lastActivity ?? "", r.certificateNumber ?? "",
     ].map(csvCell).join(","),
   );
   return [header.map(csvCell).join(","), ...lines].join("\r\n") + "\r\n";

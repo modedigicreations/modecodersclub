@@ -41,6 +41,9 @@ export function GenerateLabButton({ lessonId }: { lessonId: string }) {
       setFieldValue("starterHtml", draft.starterHtml);
       setFieldValue("starterCss", draft.starterCss);
       setFieldValue("starterJs", draft.starterJs);
+      if (typeof (draft as { checks?: unknown }).checks === "string") {
+        setFieldValue("checks", (draft as unknown as { checks: string }).checks);
+      }
       setStatus("idle");
     } catch {
       setStatus("error");

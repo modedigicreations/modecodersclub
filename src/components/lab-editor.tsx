@@ -2,7 +2,7 @@
 
 import Editor from "@monaco-editor/react";
 import { useEffect, useRef, useState } from "react";
-import { saveLabSubmission } from "@/app/dashboard/actions";
+import { checkLabWork, saveLabSubmission } from "@/app/dashboard/actions";
 
 type Code = { html: string; css: string; js: string };
 type Tab = "html" | "css" | "js";
@@ -23,13 +23,20 @@ export function LabEditor({
   lessonId,
   labId,
   hintsEnabled,
+  checkCount,
+  passed: initiallyPassed,
   initial,
 }: {
   lessonId: string;
   labId: string;
   hintsEnabled: boolean;
+  checkCount: number;
+  passed: boolean;
   initial: Code;
 }) {
+  const [passed, setPassed] = useState(initiallyPassed);
+  const [results, setResults] = useState<{ message: string; passed: boolean }[] | null>(null);
+  const [checking, setChecking] = useState<"idle" | "loading" | "error">("idle");
   const [tab, setTab] = useState<Tab>("html");
   const [code, setCode] = useState<Code>(initial);
   const [preview, setPreview] = useState(() => buildPreviewDoc(initial));
@@ -56,6 +63,21 @@ export function LabEditor({
 
   function run() {
     setPreview(buildPreviewDoc(code));
+  }
+
+  async function checkWork() {
+    setChecking("loading");
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setPreview(buildPreviewDoc(code));
+    try {
+      const outcome = await checkLabWork(labId, code.html, code.css, code.js);
+      if (!outcome.ok) throw new Error();
+      setResults(outcome.results);
+      if (outcome.passed) setPassed(true);
+      setChecking("idle");
+    } catch {
+      setChecking("error");
+    }
   }
 
   async function getHint() {
@@ -110,12 +132,31 @@ export function LabEditor({
         <button type="button" className="button button-primary" onClick={run}>
           Run
         </button>
+        {checkCount > 0 && (
+          <button type="button" className="button button-small" onClick={checkWork} disabled={checking === "loading"}>
+            {checking === "loading" ? "Checking…" : "Check my work"}
+          </button>
+        )}
+        {passed && <span className="lab-passed">✓ Lab passed</span>}
         {hintsEnabled && (
           <button type="button" className="button button-small" onClick={getHint} disabled={hintStatus === "loading"}>
             {hintStatus === "loading" ? "Thinking…" : "Get a hint"}
           </button>
         )}
       </div>
+
+      {checking === "error" && <p className="auth-error">Couldn&rsquo;t check your work. Try again.</p>}
+      {results && (
+        <ul className="lab-results" aria-live="polite">
+          {results.map((r, i) => (
+            <li key={i} className={r.passed ? "ok" : "todo"}>
+              <span aria-hidden="true">{r.passed ? "✓" : "○"}</span> {r.message}
+              <span className="sr-only">{r.passed ? " (done)" : " (not yet)"}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {results && results.every((r) => r.passed) && <p className="auth-success">All checks pass. Nice work!</p>}
 
       {hint && <p className={hintStatus === "error" ? "auth-error" : "lab-hint"}>{hint}</p>}
 

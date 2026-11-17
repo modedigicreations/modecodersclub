@@ -239,6 +239,8 @@ model Lab {
   starterCss   String   @db.VarChar(4000) @default("")
   starterJs    String   @db.VarChar(4000) @default("")
   hintsEnabled Boolean  @default(false)
+  // Auto-grading checks (see src/lib/lab-checks.ts), e.g. ["html: h1 | Add a heading"].
+  checks       Json     @default("[]")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -254,6 +256,11 @@ model LabSubmission {
   html      String   @db.VarChar(4000) @default("")
   css       String   @db.VarChar(4000) @default("")
   js        String   @db.VarChar(4000) @default("")
+  // Last "Check my work" result; passedAt is set the first time every check passes.
+  checksPassed Int       @default(0)
+  checksTotal  Int       @default(0)
+  checkedAt    DateTime?
+  passedAt     DateTime?
   updatedAt DateTime @updatedAt
 
   @@unique([labId, userId])

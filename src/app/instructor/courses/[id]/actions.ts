@@ -7,6 +7,7 @@ import { requireAdmin, requireInstructorAccess } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { enrol } from "@/lib/enrolment";
 import { toEmbedUrl } from "@/lib/video-embed";
+import { parseChecks } from "@/lib/lab-checks";
 
 function isRedirectError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "digest" in error &&
@@ -191,13 +192,12 @@ export async function upsertLab(courseId: string, lessonId: string, formData: Fo
     if ([instructions, starterHtml, starterCss, starterJs].some((v) => v.length > MAX_LAB_FIELD)) {
       throw new Error(`Each lab field can be up to ${MAX_LAB_FIELD} characters.`);
     }
+    const { checks, errors } = parseChecks(String(formData.get("checks") ?? "").slice(0, 10_000));
+    if (errors.length) throw new Error(errors.slice(0, 3).join(" "));
     await assertLessonInCourse(courseId, lessonId);
 
-    await prisma.lab.upsert({
-      where: { lessonId },
-      create: { lessonId, instructions, starterHtml, starterCss, starterJs, hintsEnabled },
-      update: { instructions, starterHtml, starterCss, starterJs, hintsEnabled },
-    });
+    const data = { instructions, starterHtml, starterCss, starterJs, hintsEnabled, checks };
+    await prisma.lab.upsert({ where: { lessonId }, create: { lessonId, ...data }, update: data });
   } catch (error) {
     if (isRedirectError(error)) throw error;
     errorRedirect(`/instructor/courses/${courseId}/lessons/${lessonId}`, error);

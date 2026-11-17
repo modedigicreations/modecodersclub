@@ -176,7 +176,13 @@ export default async function InstructorCourseWorkspacePage({
                     )}
                   </td>
                   <td>
-                    {row.labsStarted}/{row.labsTotal}
+                    {row.labsPassed}/{row.labsTotal} passed
+                    {row.labsStarted > row.labsPassed && (
+                      <>
+                        <br />
+                        <span style={{ color: "var(--muted)", fontSize: 11 }}>{row.labsStarted} started</span>
+                      </>
+                    )}
                   </td>
                   <td>{row.lastActivity ? new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(row.lastActivity) : "—"}</td>
                   <td style={{ fontSize: 11 }}>{row.certificateNumber ?? "—"}</td>

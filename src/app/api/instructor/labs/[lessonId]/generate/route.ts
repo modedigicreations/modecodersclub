@@ -4,6 +4,7 @@ import { canManageCourse, getSession } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { GENERATE_MODEL, getAnthropic } from "@/lib/anthropic";
 import { GENERATE_DAILY_LIMIT, checkAndIncrement } from "@/lib/ai-rate-limit";
+import { formatChecks, parseChecks } from "@/lib/lab-checks";
 
 type RouteContext = { params: Promise<{ lessonId: string }> };
 
@@ -12,6 +13,7 @@ type LabDraft = {
   starterHtml: string;
   starterCss: string;
   starterJs: string;
+  checks?: string[];
 };
 
 const DRAFT_TOOL: Anthropic.Tool = {
@@ -24,6 +26,14 @@ const DRAFT_TOOL: Anthropic.Tool = {
       starterHtml: { type: "string", description: "Minimal starter HTML, leaving real work for the student." },
       starterCss: { type: "string", description: "Minimal starter CSS." },
       starterJs: { type: "string", description: "Minimal starter JavaScript." },
+      checks: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "2-6 auto-grading checks the finished lab passes and the starter code does not, one per line, in these formats: " +
+          "'html: <css selector> [*N] [\"text\"] | message', 'css: <selector> { <property>[: value] } | message', " +
+          "'js: <exact code text> | message'. Example: 'html: ul > li *3 | List at least three hobbies'.",
+      },
     },
     required: ["instructions", "starterHtml", "starterCss", "starterJs"],
   },
@@ -67,7 +77,10 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const toolUse = response.content.find((block) => block.type === "tool_use");
     if (!toolUse || toolUse.type !== "tool_use") throw new Error("no draft returned");
-    return NextResponse.json({ draft: toolUse.input as LabDraft });
+    const draft = toolUse.input as LabDraft;
+    // Keep only checks the grader can read; the instructor reviews them before saving.
+    const checks = formatChecks(parseChecks((Array.isArray(draft.checks) ? draft.checks : []).join("\n")).checks);
+    return NextResponse.json({ draft: { ...draft, checks } });
   } catch (error) {
     console.error("Lab AI generation failed", error);
     return NextResponse.json({ error: "AI generation failed. Try again." }, { status: 502 });

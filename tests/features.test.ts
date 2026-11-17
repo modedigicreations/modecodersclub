@@ -8,6 +8,8 @@ import { checkEnrolment, enrol } from "@/lib/enrolment";
 import { runSubscriptionReminders } from "@/lib/subscription-reminders";
 import { csvCell, getCourseLearnerProgress, progressCsv } from "@/lib/learner-progress";
 import { getCourseRating, publicName, saveReview } from "@/lib/reviews";
+import { formatChecks, gradeLab, parseChecks } from "@/lib/lab-checks";
+import { recordLabCheck } from "@/lib/lab-submissions";
 
 if (/railway|rlwy|amazonaws|supabase|neon\.tech/i.test(process.env.DATABASE_URL ?? "")) {
   throw new Error("DATABASE_URL looks like a hosted database; refusing to run tests that write data.");
@@ -242,5 +244,75 @@ describe("F5 course reviews", () => {
 
     assert.equal(publicName("Ada"), "Ada");
     assert.equal(publicName("  "), "Learner");
+  });
+});
+
+describe("F6 auto-graded labs", () => {
+  const source = [
+    'html: h1 "Welcome" | Add a Welcome heading',
+    "html: ul > li *3",
+    "css: body { background-color }",
+    "css: .card h2 { color: RED } | Make card titles red",
+    "js: addEventListener",
+    "# comments are ignored",
+  ].join("\n");
+
+  test("parses the check format and rejects bad lines", () => {
+    const { checks, errors } = parseChecks(source);
+    assert.deepEqual(errors, []);
+    assert.equal(checks.length, 5);
+    assert.deepEqual(checks[1], { kind: "html", selector: "ul > li", min: 3, message: "Your HTML has at least 3 ul > li elements" });
+    assert.equal(checks[3]!.message, "Make card titles red");
+    assert.deepEqual(parseChecks(formatChecks(checks)).checks, checks, "format/parse round-trip");
+
+    const bad = parseChecks("python: print\nhtml: ][\ncss: body color");
+    assert.equal(bad.checks.length, 0);
+    assert.equal(bad.errors.length, 3);
+    assert.match(bad.errors[1]!, /isn't a valid CSS selector/);
+    assert.equal(parseChecks(Array(25).fill("js: x").join("\n")).checks.length, 20, "capped at 20");
+  });
+
+  test("grades HTML, CSS and JS statically", () => {
+    const { checks } = parseChecks(source);
+    const starter = { html: "<h1>Hi</h1><ul><li>a</li></ul>", css: "", js: "// addEventListener later" };
+    assert.deepEqual(gradeLab(checks, starter).map((r) => r.passed), [false, false, false, false, false], "comments don't count");
+
+    const done = {
+      html: "<h1>  welcome   home</h1><ul><li>a</li><li>b</li><li>c</li></ul><div class='card'><h2>x</h2></div>",
+      css: "/* body { background-color: x } */ @media (min-width: 1px) { body { margin: 0; background-color: #fff } }\n.card   h2, p { color: red; }",
+      js: "document.querySelector('button').addEventListener('click', () => {});",
+    };
+    assert.deepEqual(gradeLab(checks, done).map((r) => r.passed), [true, true, true, true, true]);
+    assert.deepEqual(gradeLab(checks, { ...done, css: ".card h2 { color: blue }" }).map((r) => r.passed).slice(2, 4), [false, false]);
+  });
+
+  test("checking work records the first full pass, and a later failing check doesn't undo it", async () => {
+    const { checks } = parseChecks("html: p\ncss: p { color }");
+    const lab = await prisma.lab.create({ data: { lessonId: `${P}-l2`, instructions: "Add a paragraph", checks } });
+    const row = () => prisma.labSubmission.findUniqueOrThrow({ where: { labId_userId: { labId: lab.id, userId: ids.learner } } });
+
+    const half = await recordLabCheck(lab.id, ids.learner, { html: "<p>x</p>", css: "", js: "" });
+    assert.deepEqual(half!.results.map((r) => r.passed), [true, false]);
+    assert.equal(half!.passed, false);
+    assert.equal((await row()).passedAt, null);
+    assert.equal((await row()).checksPassed, 1);
+
+    const full = await recordLabCheck(lab.id, ids.learner, { html: "<p>x</p>", css: "p{color:red}", js: "" });
+    assert.equal(full!.passed, true);
+    const passedAt = (await row()).passedAt!;
+    assert.ok(passedAt);
+
+    await recordLabCheck(lab.id, ids.learner, { html: "", css: "", js: "" });
+    assert.equal((await row()).passedAt!.getTime(), passedAt.getTime(), "a pass sticks");
+    assert.equal((await row()).checksPassed, 0);
+
+    const rows = await getCourseLearnerProgress(ids.course);
+    const learner = rows.find((r) => r.userId === ids.learner)!;
+    assert.equal(learner.labsTotal, 1);
+    assert.equal(learner.labsPassed, 1);
+    assert.ok(progressCsv(rows).split("\n")[0]!.includes('"Labs passed"'));
+
+    const noChecks = await prisma.lab.create({ data: { lessonId: `${P}-l1`, instructions: "Free play" } });
+    assert.equal(await recordLabCheck(noChecks.id, ids.learner, { html: "", css: "", js: "" }), null, "labs without checks aren't graded");
   });
 });

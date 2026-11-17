@@ -2418,3 +2418,24 @@ p {
   margin-top: 6px;
   color: var(--muted);
 }
+
+.lab-passed {
+  align-self: center;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--green-dark);
+}
+.lab-results {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+}
+.lab-results .ok {
+  color: var(--green-dark);
+}
+.lab-results .todo {
+  color: var(--muted);
+}
