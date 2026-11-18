@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TutorPromo } from "@/components/tutor/tutor-promo";
 import { requireUser } from "@/lib/session";
 import prisma from "@/lib/prisma";
 import { hasActiveSubscription } from "@/lib/subscriptions";
@@ -56,13 +57,15 @@ export default async function DashboardPage({
           <h1>Welcome back,<br /><span>{session.user.name.split(" ")[0]}.</span></h1>
           <p>Pick up where you left off.</p>
           <p>
-            <Link className="text-link" href="/tutor">📖🔢 Reading &amp; maths tutor</Link>
-            {" · "}
             <Link className="text-link" href="/dashboard/billing">Billing &amp; subscription</Link>
             {" · "}
             <Link className="text-link" href="/courses">Browse courses</Link>
           </p>
         </div>
+      </section>
+
+      <section className="container tutor-dash">
+        <TutorPromo signedIn compact />
       </section>
 
       <section className="section catalog-section">

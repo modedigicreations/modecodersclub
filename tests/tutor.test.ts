@@ -190,3 +190,15 @@ describe("school launch destination", () => {
     }
   });
 });
+
+import { safeNext } from "@/lib/safe-next";
+
+describe("sign-in return path", () => {
+  test("returns to the tutor or dashboard only", () => {
+    assert.equal(safeNext("/tutor"), "/tutor");
+    assert.equal(safeNext("/tutor/literacy/placement"), "/tutor/literacy/placement");
+    assert.equal(safeNext("https://evil.com", ""), "");
+    assert.equal(safeNext("//evil.com", ""), "");
+    assert.equal(safeNext(undefined, ""), "");
+  });
+});

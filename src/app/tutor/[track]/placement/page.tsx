@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Find your level" };
 export default async function PlacementPage({ params }: { params: Promise<{ track: string }> }) {
   const { track } = await params;
   if (!isTrack(track)) notFound();
-  await requireUser();
+  await requireUser(`/tutor/${track}/placement`);
   const meta = TRACKS[track];
   return (
     <main className="tutor-page">

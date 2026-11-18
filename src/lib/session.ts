@@ -11,9 +11,10 @@ export async function getSession() {
   });
 }
 
-export async function requireUser() {
+/** `next` (a dashboard or tutor path) brings the learner back after signing in. */
+export async function requireUser(next?: string) {
   const session = await getSession();
-  if (!session) redirect("/login");
+  if (!session) redirect(next ? `/login?next=${encodeURIComponent(next)}` : "/login");
   return session;
 }
 
