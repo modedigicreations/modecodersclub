@@ -13,7 +13,9 @@ export type BadgeKey =
   | "course-complete"
   | "streak-3"
   | "streak-7"
-  | "streak-30";
+  | "streak-30"
+  | "word-wizard"
+  | "number-ninja";
 
 export type BadgeStats = {
   lessonsDone: number;
@@ -22,6 +24,9 @@ export type BadgeStats = {
   labsPassed: number;
   certificates: number;
   longestStreak: number;
+  /** Tutor skills mastered through practice (not just placed). */
+  readingSkillsMastered?: number;
+  mathsSkillsMastered?: number;
 };
 
 export const BADGES: { key: BadgeKey; icon: string; name: string; description: string; earned: (s: BadgeStats) => boolean }[] = [
@@ -34,6 +39,8 @@ export const BADGES: { key: BadgeKey; icon: string; name: string; description: s
   { key: "streak-3", icon: "🔥", name: "On a roll", description: "Learn 3 days in a row", earned: (s) => s.longestStreak >= 3 },
   { key: "streak-7", icon: "⚡", name: "Week warrior", description: "Learn 7 days in a row", earned: (s) => s.longestStreak >= 7 },
   { key: "streak-30", icon: "🏆", name: "Unstoppable", description: "Learn 30 days in a row", earned: (s) => s.longestStreak >= 30 },
+  { key: "word-wizard", icon: "📖", name: "Word Wizard", description: "Master 5 reading and writing skills in the tutor", earned: (s) => (s.readingSkillsMastered ?? 0) >= 5 },
+  { key: "number-ninja", icon: "🧮", name: "Number Ninja", description: "Master 5 maths skills in the tutor", earned: (s) => (s.mathsSkillsMastered ?? 0) >= 5 },
 ];
 
 /** The calendar day (YYYY-MM-DD) of `date` in the learning time zone. */
@@ -72,14 +79,22 @@ export async function getStreaks(userId: string, now = new Date()) {
 }
 
 async function badgeStats(userId: string, now: Date): Promise<BadgeStats> {
-  const [lessonsDone, attempts, labsPassed, certificates, streaks] = await Promise.all([
+  const [lessonsDone, attempts, labsPassed, certificates, streaks, tutor] = await Promise.all([
     prisma.lessonProgress.count({ where: { enrollment: { userId } } }),
     prisma.assessmentAttempt.findMany({ where: { userId, total: { gt: 0 } }, select: { score: true, total: true } }),
     prisma.labSubmission.count({ where: { userId, passedAt: { not: null } } }),
     prisma.certificate.count({ where: { userId, status: "ACTIVE" } }),
     getStreaks(userId, now),
+    prisma.tutorSkillProgress.groupBy({
+      by: ["track"],
+      where: { userId, masteredAt: { not: null }, placed: false },
+      _count: { _all: true },
+    }),
   ]);
+  const tutorCount = (track: string) => tutor.find((t) => t.track === track)?._count._all ?? 0;
   return {
+    readingSkillsMastered: tutorCount("literacy"),
+    mathsSkillsMastered: tutorCount("numeracy"),
     lessonsDone,
     quizzesPassed: attempts.filter((a) => (a.score / a.total) * 100 >= QUIZ_PASS_PERCENT).length,
     perfectQuizzes: attempts.filter((a) => a.score === a.total).length,

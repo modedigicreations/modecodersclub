@@ -56,6 +56,8 @@ export default async function DashboardPage({
           <h1>Welcome back,<br /><span>{session.user.name.split(" ")[0]}.</span></h1>
           <p>Pick up where you left off.</p>
           <p>
+            <Link className="text-link" href="/tutor">📖🔢 Reading &amp; maths tutor</Link>
+            {" · "}
             <Link className="text-link" href="/dashboard/billing">Billing &amp; subscription</Link>
             {" · "}
             <Link className="text-link" href="/courses">Browse courses</Link>

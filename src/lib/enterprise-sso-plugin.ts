@@ -21,6 +21,13 @@ interface EnterpriseSsoPayload {
   name: string;
   isEnterprise: true;
   exp: number;
+  schoolName?: string;
+}
+
+/** Where a school launch may land: the dashboard or the tutor (never another site). */
+export function safeSsoDestination(next: unknown): string {
+  if (typeof next !== "string") return "/dashboard";
+  return /^\/(dashboard|tutor)(\/[a-z0-9/-]*)?$/i.test(next) ? next : "/dashboard";
 }
 
 function base64UrlToBytes(input: string): Uint8Array<ArrayBuffer> {
@@ -87,7 +94,7 @@ export function enterpriseSsoPlugin(): BetterAuthPlugin {
         "/sso",
         {
           method: "GET",
-          query: z.object({ token: z.string() }),
+          query: z.object({ token: z.string(), next: z.string().max(200).optional() }),
         },
         async (ctx) => {
           // A dedicated secret shared only with Modebills. Falling back to
@@ -122,6 +129,8 @@ export function enterpriseSsoPlugin(): BetterAuthPlugin {
           });
 
           const email = payload.email.trim().toLowerCase();
+          const schoolName =
+            typeof payload.schoolName === "string" && payload.schoolName.trim() ? payload.schoolName.trim().slice(0, 160) : null;
           const existing = await ctx.context.internalAdapter.findUserByEmail(email);
           let user = existing?.user;
 
@@ -140,21 +149,26 @@ export function enterpriseSsoPlugin(): BetterAuthPlugin {
                 role: "learner",
                 emailVerified: true,
                 isEnterpriseSso: true,
+                schoolName: schoolName ?? null,
               },
               { method: "enterprise-sso" },
             );
-          } else if (!(user as { isEnterpriseSso?: boolean }).isEnterpriseSso) {
-            // Their school may have only just enabled Coders Club access
-            // after this student already had an individual account.
+          } else if (
+            !(user as { isEnterpriseSso?: boolean }).isEnterpriseSso ||
+            (schoolName && (user as { schoolName?: string | null }).schoolName !== schoolName)
+          ) {
+            // Their school may have only just enabled Coders Club access after
+            // this student already had an individual account (or they moved school).
             user = await ctx.context.internalAdapter.updateUser(user.id, {
               isEnterpriseSso: true,
+              ...(schoolName ? { schoolName } : {}),
             });
           }
 
           const session = await ctx.context.internalAdapter.createSession(user.id);
           await setSessionCookie(ctx, { session, user });
 
-          throw ctx.redirect("/dashboard");
+          throw ctx.redirect(safeSsoDestination(ctx.query.next));
         },
       ),
     },

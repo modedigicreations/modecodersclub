@@ -78,6 +78,12 @@ function buildAuth() {
           defaultValue: false,
           input: false,
         },
+        // School name from the Modeschools SSO token; server-set only.
+        schoolName: {
+          type: "string",
+          required: false,
+          input: false,
+        },
       },
     },
     databaseHooks: {

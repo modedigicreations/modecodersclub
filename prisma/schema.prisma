@@ -41,12 +41,18 @@ model User {
   // Provisioned via the Modebills Enterprise SSO launcher — exempt from the
   // individual-subscription gate in enrollStudent (their school already pays).
   isEnterpriseSso Boolean        @default(false)
+  // School name from the Modeschools SSO token (teachers filter by school).
+  schoolName      String?        @db.VarChar(160)
   subscriptions   Subscription[]
 
   courseGenerationJobs CourseGenerationJob[]
   courseReviews        CourseReview[]
   learningDays         LearningDay[]
   blogPosts            BlogPost[]
+  tutorProgress        TutorSkillProgress[]
+  tutorPlacements      TutorPlacement[]
+  tutorWritings        TutorWriting[]
+  tutorParentLinks     TutorParentLink[]
   badges               UserBadge[]
 
   @@map("user")
@@ -444,4 +450,80 @@ model BlogPost {
   updatedAt       DateTime  @updatedAt
 
   @@index([publishedAt])
+}
+
+// ── Reading, writing & maths tutor ──────────────────────────────────────────
+// Questions are generated from a seed (src/lib/tutor), so only progress is stored.
+
+// A learner's progress on one skill of the ladder.
+model TutorSkillProgress {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId         String    @db.VarChar(40)
+  track           String    @db.VarChar(16)
+  attempts        Int       @default(0)
+  correct         Int       @default(0)
+  // Last results, oldest first: "1" right, "0" wrong (at most 10).
+  recent          String    @default("") @db.VarChar(10)
+  masteredAt      DateTime?
+  // Mastered by the placement test rather than practice.
+  placed          Boolean   @default(false)
+  // Spaced review of mastered skills.
+  reviewStep      Int       @default(0)
+  reviewDueAt     DateTime?
+  lastPracticedAt DateTime?
+  // Issue time of the last question answered: older or repeated tokens are refused.
+  lastItemIssuedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, skillId])
+  @@index([userId, track])
+}
+
+// Result of a learner's placement test for one track.
+model TutorPlacement {
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track       String   @db.VarChar(16)
+  // First skill they still need to learn.
+  startSkill  String   @db.VarChar(40)
+  questions   Int
+  correct     Int
+  completedAt DateTime @default(now())
+
+  @@id([userId, track])
+}
+
+// Writing tasks with their feedback.
+model TutorWriting {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skillId   String   @db.VarChar(40)
+  prompt    String   @db.VarChar(300)
+  text      String   @db.VarChar(4000)
+  // 0-100 overall, and rubric details/feedback as JSON.
+  score     Int
+  feedback  Json
+  passed    Boolean
+  aiChecked Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Read-only progress link for a parent or guardian.
+model TutorParentLink {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email         String    @db.VarChar(254)
+  token         String    @unique @db.VarChar(64)
+  createdAt     DateTime  @default(now())
+  lastEmailedAt DateTime?
+  revokedAt     DateTime?
+
+  @@unique([userId, email])
 }

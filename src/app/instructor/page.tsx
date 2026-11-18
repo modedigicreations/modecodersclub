@@ -32,6 +32,9 @@ export default async function InstructorCoursesPage() {
           <p className="eyebrow"><span /> Instructor workspace</p>
           <h1>Your courses.</h1>
           <p>Manage lessons and enrolled learners for each course you teach.</p>
+          <p>
+            <Link className="text-link" href="/instructor/tutor">📖🔢 Reading &amp; maths tutor progress →</Link>
+          </p>
         </div>
       </section>
       <section className="section catalog-section">
