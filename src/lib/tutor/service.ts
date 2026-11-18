@@ -1,11 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { checkAndIncrement } from "@/lib/ai-rate-limit";
-import { recordLearning } from "@/lib/achievements";
+import { localDay, recordLearning } from "@/lib/achievements";
 import { EXPLAIN_DAILY_LIMIT, WRITING_DAILY_LIMIT, aiAvailable, explainMistake, rubricScore, writingFeedback } from "./ai";
 import { checkWriting, isCorrect } from "./grading";
 import {
-  EMPTY_PROGRESS,
   applyAnswer,
   masteryPercent,
   placedReviewDue,
@@ -18,8 +17,6 @@ import { issueItemToken, newSeed, readItemToken } from "./token";
 import type { PublicItem, Skill, Track, TutorItem } from "./types";
 
 export const SESSION_LENGTH = 10;
-
-type ProgressRow = Awaited<ReturnType<typeof prisma.tutorSkillProgress.findMany>>[number];
 
 function kindOf(skill: Skill): TutorItem["kind"] {
   return skill.generate({ next: () => 0, int: (a) => a, pick: (l) => l[0]!, shuffle: (l) => [...l] }).kind;
@@ -113,7 +110,7 @@ export async function nextPracticeItem(userId: string, track: Track, now = new D
 }
 
 export type AnswerResult =
-  | { ok: false; error: string }
+  | { ok: false; error: string; stale?: boolean }
   | {
       ok: true;
       correct: boolean;
@@ -124,37 +121,56 @@ export type AnswerResult =
       newBadges: string[];
     };
 
-async function saveProgress(
-  userId: string,
-  skill: Skill,
-  row: ProgressRow | undefined,
-  correct: boolean,
-  issuedAt: Date,
-  now: Date,
-) {
-  const next = applyAnswer(row ?? EMPTY_PROGRESS, correct, kindOf(skill), now);
-  const data = {
-    attempts: next.attempts,
-    correct: next.correct,
-    recent: next.recent,
-    masteredAt: next.masteredAt,
-    reviewStep: next.reviewStep,
-    reviewDueAt: next.reviewDueAt,
-    lastPracticedAt: now,
-    lastItemIssuedAt: issuedAt,
-  };
-  await prisma.tutorSkillProgress.upsert({
-    where: { userId_skillId: { userId, skillId: skill.id } },
-    create: { userId, skillId: skill.id, track: skill.track, ...data },
-    update: data,
+/**
+ * Claims a question so it can only be marked once, even if the same answer
+ * is sent twice at the same moment: the row's last-issued time must be older
+ * than this question's.
+ */
+async function claimItem(userId: string, skill: Skill, issuedAt: Date): Promise<boolean> {
+  const claimed = await prisma.tutorSkillProgress.updateMany({
+    where: { userId, skillId: skill.id, OR: [{ lastItemIssuedAt: null }, { lastItemIssuedAt: { lt: issuedAt } }] },
+    data: { lastItemIssuedAt: issuedAt },
   });
-  // Streak day + badges: on mastery, the first answer of the day, and every 5th answer.
-  const firstToday = !row?.lastPracticedAt || row.lastPracticedAt.toDateString() !== now.toDateString();
-  let newBadges: string[] = [];
-  if (next.justMastered || firstToday || next.attempts % 5 === 0) {
-    newBadges = await recordLearning(userId, now).catch(() => []);
+  if (claimed.count === 1) return true;
+  try {
+    await prisma.tutorSkillProgress.create({
+      data: { userId, skillId: skill.id, track: skill.track, lastItemIssuedAt: issuedAt },
+    });
+    return true;
+  } catch (error) {
+    // Unique clash: the row exists, so this question (or a newer one) was already answered.
+    if ((error as { code?: string }).code === "P2002") return false;
+    throw error;
   }
-  return { justMastered: next.justMastered, newBadges };
+}
+
+/** Records a claimed answer. Retries if another answer for this skill landed in between. */
+async function saveProgress(userId: string, skill: Skill, correct: boolean, now: Date) {
+  for (let attempt = 0; ; attempt++) {
+    const row = await prisma.tutorSkillProgress.findUnique({ where: { userId_skillId: { userId, skillId: skill.id } } });
+    if (!row) throw new Error("tutor progress row missing after claim");
+    const next = applyAnswer(row, correct, kindOf(skill), now);
+    const updated = await prisma.tutorSkillProgress.updateMany({
+      where: { id: row.id, attempts: row.attempts },
+      data: {
+        attempts: next.attempts,
+        correct: next.correct,
+        recent: next.recent,
+        masteredAt: next.masteredAt,
+        reviewStep: next.reviewStep,
+        reviewDueAt: next.reviewDueAt,
+        lastPracticedAt: now,
+      },
+    });
+    if (updated.count === 0 && attempt < 4) continue;
+    // Streak day + badges: on mastery, the first answer of the (Lagos) day, and every 5th answer.
+    const firstToday = !row.lastPracticedAt || localDay(row.lastPracticedAt) !== localDay(now);
+    let newBadges: string[] = [];
+    if (next.justMastered || firstToday || next.attempts % 5 === 0) {
+      newBadges = await recordLearning(userId, now).catch(() => []);
+    }
+    return { justMastered: next.justMastered, newBadges };
+  }
 }
 
 async function loadForAnswer(userId: string, token: unknown) {
@@ -168,23 +184,21 @@ async function loadForAnswer(userId: string, token: unknown) {
 
 export async function submitPracticeAnswer(userId: string, token: unknown, response: unknown, now = new Date()): Promise<AnswerResult> {
   const loaded = await loadForAnswer(userId, token);
-  if ("error" in loaded) return { ok: false, error: loaded.error! };
+  if ("error" in loaded) return { ok: false, stale: true, error: loaded.error! };
   const { claims, skill, item } = loaded;
   if (claims.m !== "practice") return { ok: false, error: "Wrong question type." };
   if (item.kind === "write") return { ok: false, error: "Use the writing box for this task." };
-  const row = await prisma.tutorSkillProgress.findUnique({ where: { userId_skillId: { userId, skillId: skill.id } } });
-  const issuedAt = new Date(claims.t);
-  if (row?.lastItemIssuedAt && issuedAt <= row.lastItemIssuedAt) {
-    return { ok: false, error: "You've already answered this one." };
+  if (!(await claimItem(userId, skill, new Date(claims.t)))) {
+    return { ok: false, stale: true, error: "You've already answered this one. Here's a fresh one." };
   }
   const answerText = typeof response === "string" ? response.slice(0, 300) : "";
   const correct = isCorrect(item, answerText);
-  const { justMastered, newBadges } = await saveProgress(userId, skill, row ?? undefined, correct, issuedAt, now);
+  const { justMastered, newBadges } = await saveProgress(userId, skill, correct, now);
   return { ok: true, correct, answer: item.answer, explain: item.explain, justMastered, skillTitle: skill.title, newBadges };
 }
 
 export type WritingResult =
-  | { ok: false; error: string }
+  | { ok: false; error: string; stale?: boolean }
   | {
       ok: true;
       passed: boolean;
@@ -201,14 +215,14 @@ export type WritingResult =
 /** Marks a writing task: AI rubric feedback when available, otherwise free basic checks. */
 export async function submitWriting(userId: string, token: unknown, textRaw: unknown, now = new Date()): Promise<WritingResult> {
   const loaded = await loadForAnswer(userId, token);
-  if ("error" in loaded) return { ok: false, error: loaded.error! };
+  if ("error" in loaded) return { ok: false, stale: true, error: loaded.error! };
   const { claims, skill, item } = loaded;
   if (item.kind !== "write") return { ok: false, error: "This isn't a writing task." };
   const text = typeof textRaw === "string" ? textRaw.trim().slice(0, 4000) : "";
   if (text.split(/\s+/).filter(Boolean).length < 2) return { ok: false, error: "Write a little more first." };
-  const row = await prisma.tutorSkillProgress.findUnique({ where: { userId_skillId: { userId, skillId: skill.id } } });
-  const issuedAt = new Date(claims.t);
-  if (row?.lastItemIssuedAt && issuedAt <= row.lastItemIssuedAt) return { ok: false, error: "You've already sent this one." };
+  if (!(await claimItem(userId, skill, new Date(claims.t)))) {
+    return { ok: false, stale: true, error: "You've already sent this one. Here's a fresh task." };
+  }
 
   const minWords = item.minWords ?? 5;
   const basic = checkWriting(text, minWords);
@@ -247,7 +261,7 @@ export async function submitWriting(userId: string, token: unknown, textRaw: unk
       aiChecked,
     },
   });
-  const { justMastered, newBadges } = await saveProgress(userId, skill, row ?? undefined, passed, issuedAt, now);
+  const { justMastered, newBadges } = await saveProgress(userId, skill, passed, now);
   return { ok: true, passed, score, aiChecked, tips: basic.tips, praise, nextStep, improved, justMastered, newBadges };
 }
 
@@ -255,8 +269,16 @@ export async function submitWriting(userId: string, token: unknown, textRaw: unk
 export async function explainItem(userId: string, token: unknown, response: unknown): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
   const loaded = await loadForAnswer(userId, token);
   if ("error" in loaded) return { ok: false, error: loaded.error! };
-  const { skill, item } = loaded;
-  if (item.kind === "write") return { ok: false, error: "Writing tasks get their own feedback." };
+  const { claims, skill, item } = loaded;
+  if (item.kind === "write" || claims.m !== "practice") return { ok: false, error: "No explanation for this one." };
+  // Only after answering, so the explanation can't be used to look up the answer first.
+  const row = await prisma.tutorSkillProgress.findUnique({
+    where: { userId_skillId: { userId, skillId: skill.id } },
+    select: { lastItemIssuedAt: true },
+  });
+  if (!row?.lastItemIssuedAt || row.lastItemIssuedAt.getTime() < claims.t) {
+    return { ok: false, error: "Answer the question first." };
+  }
   if (!aiAvailable()) return { ok: true, text: item.explain };
   if (!checkAndIncrement(`tutor-explain:${userId}`, EXPLAIN_DAILY_LIMIT)) {
     return { ok: false, error: `You've used today's ${EXPLAIN_DAILY_LIMIT} tutor explanations. Here's the short one: ${item.explain}` };
@@ -299,8 +321,8 @@ export function beginPlacement(userId: string, track: Track, stage: number): Ser
 
 export type PlacementAnswer =
   | { ok: false; error: string }
-  | { ok: true; correct: boolean; done: false; next: ServedItem; asked: number }
-  | { ok: true; correct: boolean; done: true; startSkill: string | null; mastered: number; asked: number };
+  | { ok: true; done: false; next: ServedItem; asked: number }
+  | { ok: true; done: true; startSkill: string | null; mastered: number; asked: number };
 
 export async function answerPlacement(userId: string, token: unknown, response: unknown, now = new Date()): Promise<PlacementAnswer> {
   const loaded = await loadForAnswer(userId, token);
@@ -313,14 +335,13 @@ export async function answerPlacement(userId: string, token: unknown, response: 
   const correct = isCorrect(item, typeof response === "string" ? response.slice(0, 300) : "");
   const stepped = stepPlacement(claims.p, correct);
   if (!stepped.done) {
-    return { ok: true, correct, done: false, next: servePlacement(userId, track, stepped.state), asked: stepped.state.asked };
+    return { ok: true, done: false, next: servePlacement(userId, track, stepped.state), asked: stepped.state.asked };
   }
   const ladder = trackSkills(track);
   const startIndex = Math.min(stepped.startIndex, ladder.length);
   await savePlacement(userId, track, startIndex, stepped.state.asked, stepped.state.right, now);
   return {
     ok: true,
-    correct,
     done: true,
     startSkill: ladder[startIndex]?.id ?? null,
     mastered: startIndex,

@@ -36,9 +36,10 @@ export function PracticeSession({ track, trackTitle }: { track: string; trackTit
   const [finished, setFinished] = useState(false);
   const nextRef = useRef<HTMLButtonElement>(null);
 
-  const load = useCallback(async () => {
+  /** `keepError` leaves a "here's a fresh one" message on screen while the new question loads. */
+  const load = useCallback(async (keepError = false) => {
     setBusy(true);
-    setError("");
+    if (!keepError) setError("");
     setFeedback(null);
     setExplanation(null);
     try {
@@ -76,7 +77,11 @@ export function PracticeSession({ track, trackTitle }: { track: string; trackTit
     try {
       if (served.item.kind === "write") {
         const res = await tutorWrite(served.token, response);
-        if (!res.ok) return setError(res.error);
+        if (!res.ok) {
+          setError(res.error);
+          if (res.stale) void load(true);
+          return;
+        }
         setFeedback({ type: "write", result: res });
         if (res.passed) setRight((r) => r + 1);
         if (res.justMastered) setMastered((m) => [...m, served.skill.title]);
@@ -85,7 +90,7 @@ export function PracticeSession({ track, trackTitle }: { track: string; trackTit
         const res = await tutorAnswer(served.token, response);
         if (!res.ok) {
           setError(res.error);
-          if (res.error.includes("expired")) void load();
+          if (res.stale) void load(true);
           return;
         }
         setFeedback({ type: "answer", result: res, response });
@@ -194,6 +199,11 @@ export function PracticeSession({ track, trackTitle }: { track: string; trackTit
       )}
 
       {error && <p className="auth-error" role="alert">{error}</p>}
+      {!served && !busy && error && (
+        <button type="button" className="gz-btn gz-btn-primary" onClick={() => void load()}>
+          Try again
+        </button>
+      )}
 
       {feedback?.type === "answer" && (
         <div className={`tutor-feedback ${feedback.result.correct ? "is-right" : "is-wrong"}`} role="status">

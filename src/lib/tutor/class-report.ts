@@ -3,6 +3,17 @@ import { csvCell } from "@/lib/learner-progress";
 import { trackSkills } from "./skills";
 import type { Track } from "./types";
 
+/**
+ * Who may see learners' tutor progress (names, emails, schools): admins, and
+ * instructors an admin has assigned to at least one course. Anyone can sign
+ * up as an instructor, so the role alone isn't enough.
+ */
+export async function canViewTutorReport(user: { id: string; role?: string | null }): Promise<boolean> {
+  if (user.role === "admin") return true;
+  if (user.role !== "instructor") return false;
+  return (await prisma.courseInstructor.count({ where: { userId: user.id } })) > 0;
+}
+
 export type TutorLearnerRow = {
   userId: string;
   name: string;

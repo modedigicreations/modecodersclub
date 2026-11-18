@@ -77,6 +77,7 @@ describe("tutor grading", () => {
   test("numbers in any reasonable form", () => {
     assert.equal(parseNumber("1,200"), 1200);
     assert.equal(parseNumber("₦500"), 500);
+    assert.equal(parseNumber("500 naira"), 500);
     assert.equal(parseNumber(" 7 "), 7);
     assert.equal(parseNumber("0.5"), 0.5);
     assert.equal(parseNumber("1/2"), 0.5);

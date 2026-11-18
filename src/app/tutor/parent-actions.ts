@@ -8,6 +8,8 @@ import { sendEmail } from "@/lib/email";
 import { newParentToken } from "@/lib/tutor/token";
 
 const MAX_PARENTS = 3;
+/** Emails a learner can trigger per day (stops "stop sharing, re-add" being used to send spam). */
+const MAX_EMAILS_PER_DAY = 5;
 
 function escapeHtml(v: string) {
   return v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -24,12 +26,18 @@ export async function addParentLink(formData: FormData) {
   const existing = await prisma.tutorParentLink.findUnique({ where: { userId_email: { userId: session.user.id, email } } });
   if (!existing?.revokedAt && existing) redirect("/tutor?parentError=" + encodeURIComponent("That email already has a link.") + "#family");
   if (active >= MAX_PARENTS) redirect("/tutor?parentError=" + encodeURIComponent(`You can share with up to ${MAX_PARENTS} people.`) + "#family");
+  const sentToday = await prisma.tutorParentLink.count({
+    where: { userId: session.user.id, lastEmailedAt: { gt: new Date(Date.now() - 86_400_000) } },
+  });
+  if (sentToday >= MAX_EMAILS_PER_DAY) {
+    redirect("/tutor?parentError=" + encodeURIComponent("You've sent enough links for today. Try again tomorrow.") + "#family");
+  }
 
   const token = newParentToken();
   await prisma.tutorParentLink.upsert({
     where: { userId_email: { userId: session.user.id, email } },
-    create: { userId: session.user.id, email, token },
-    update: { token, revokedAt: null, createdAt: new Date() },
+    create: { userId: session.user.id, email, token, lastEmailedAt: new Date() },
+    update: { token, revokedAt: null, createdAt: new Date(), lastEmailedAt: new Date() },
   });
   const base = process.env.BETTER_AUTH_URL;
   if (base) {

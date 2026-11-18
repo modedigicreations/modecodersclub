@@ -29,7 +29,10 @@ export function useSpeech() {
     };
     choose();
     window.speechSynthesis.addEventListener("voiceschanged", choose);
-    return () => window.speechSynthesis.removeEventListener("voiceschanged", choose);
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", choose);
+      window.speechSynthesis.cancel(); // stop talking when the learner leaves the page
+    };
   }, []);
 
   const speak = useCallback(
