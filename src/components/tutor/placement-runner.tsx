@@ -48,7 +48,13 @@ export function PlacementRunner({ track, trackTitle }: { track: string; trackTit
     setError("");
     try {
       const res = await tutorPlacementAnswer(served.token, response);
-      if (!res.ok) return setError(res.error);
+      if (!res.ok) {
+        // Usually an expired question (left open for hours): start the check again.
+        setServed(null);
+        setAsked(0);
+        setError(`${res.error} Pick where to start again.`);
+        return;
+      }
       setAsked(res.asked);
       if (res.done) {
         setDone({ mastered: res.mastered });
@@ -65,8 +71,14 @@ export function PlacementRunner({ track, trackTitle }: { track: string; trackTit
 
   async function skip() {
     setBusy(true);
-    await tutorSkipPlacement(track).catch(() => null);
-    router.push(`/tutor/${track}`);
+    setError("");
+    try {
+      await tutorSkipPlacement(track);
+      router.push(`/tutor/${track}`);
+    } catch {
+      setError("Couldn't save that. Check your connection and try again.");
+      setBusy(false);
+    }
   }
 
   if (done) {

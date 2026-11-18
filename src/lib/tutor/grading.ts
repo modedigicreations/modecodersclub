@@ -12,9 +12,9 @@ export function normaliseText(value: string): string {
     .toLowerCase();
 }
 
-/** Parse "12", "1,200", "₦500", "0.5", "1/2", "-3". Returns null if not a number. */
+/** Parse "12", "1,200", "₦500", "500 naira", "0.5", "1/2", "-3". Returns null if not a number. */
 export function parseNumber(value: string): number | null {
-  const s = value.trim().replace(/[₦,\s]/g, "").replace(/^naira/i, "");
+  const s = value.trim().replace(/[₦,\s]/g, "").replace(/^naira|naira$/gi, "");
   if (/^-?\d+\/\d+$/.test(s)) {
     const [n, d] = s.split("/").map(Number);
     return d ? n! / d : null;

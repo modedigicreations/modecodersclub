@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
-import { getTutorClassReport, tutorSchools } from "@/lib/tutor/class-report";
+import { canViewTutorReport, getTutorClassReport, tutorSchools } from "@/lib/tutor/class-report";
 
 export const instant = false;
 export const metadata: Metadata = { title: "Tutor progress" };
@@ -12,12 +12,32 @@ const dateFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short
 export default async function InstructorTutorPage({ searchParams }: { searchParams: Promise<{ school?: string; q?: string }> }) {
   const session = await requireUser();
   if (session.user.role !== "admin" && session.user.role !== "instructor") redirect("/");
+  if (!(await canViewTutorReport(session.user))) {
+    return (
+      <main>
+        <section className="section catalog-section">
+          <div className="container">
+            <h1>Reading &amp; maths tutor</h1>
+            <p className="admin-empty">
+              Learner progress is visible once an admin has assigned you to a course. Ask an admin to set this up.
+            </p>
+            <p style={{ marginTop: 24 }}>
+              <Link className="text-link text-link-back" href="/instructor"><span aria-hidden="true">←</span> Back to courses</Link>
+            </p>
+          </div>
+        </section>
+      </main>
+    );
+  }
   const { school, q } = await searchParams;
   const [rows, schools] = await Promise.all([
     getTutorClassReport({ school: school || undefined, search: q?.trim().slice(0, 80) || undefined }),
     tutorSchools(),
   ]);
-  const csvHref = `/api/instructor/tutor/progress${school ? `?school=${encodeURIComponent(school)}` : ""}`;
+  const csvParams = new URLSearchParams();
+  if (school) csvParams.set("school", school);
+  if (q?.trim()) csvParams.set("q", q.trim().slice(0, 80));
+  const csvHref = `/api/instructor/tutor/progress${csvParams.size ? `?${csvParams}` : ""}`;
 
   return (
     <main>
