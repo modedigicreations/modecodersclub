@@ -11,6 +11,7 @@
 // user in" otherwise. The existing catch-all at
 // src/app/api/auth/[...all]/route.ts already serves it at /api/auth/sso,
 // no new route file needed.
+import { safeNext } from "@/lib/safe-next";
 import type { BetterAuthPlugin } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
@@ -26,8 +27,7 @@ interface EnterpriseSsoPayload {
 
 /** Where a school launch may land: the dashboard or the tutor (never another site). */
 export function safeSsoDestination(next: unknown): string {
-  if (typeof next !== "string") return "/dashboard";
-  return /^\/(dashboard|tutor)(\/[a-z0-9/-]*)?$/i.test(next) ? next : "/dashboard";
+  return safeNext(next, "/dashboard");
 }
 
 function base64UrlToBytes(input: string): Uint8Array<ArrayBuffer> {

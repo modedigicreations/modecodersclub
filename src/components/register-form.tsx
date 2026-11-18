@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth-client";
 
-export function RegisterForm() {
+/** `next` is already checked by the page: a dashboard or tutor path, or "". */
+export function RegisterForm({ next = "" }: { next?: string }) {
   const router = useRouter();
   const [errorMessage, setErrorMessage] = useState("");
   const [pending, setPending] = useState(false);
@@ -30,7 +31,7 @@ export function RegisterForm() {
         return;
       }
 
-      router.replace(role === "instructor" ? "/instructor" : "/community");
+      router.replace(role === "instructor" ? "/instructor" : next || "/community");
       router.refresh();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Unable to reach Mode Coders Club. Please try again.");
@@ -44,7 +45,9 @@ export function RegisterForm() {
       <section className="auth-card">
         <h1>Create a community account</h1>
         <p className="auth-subtitle">
-          For posting in the weekly discussion sessions. No account needed just to browse courses.
+          {next.startsWith("/tutor")
+            ? "Free account for the reading, writing & maths tutor. Your progress is saved as you learn."
+            : "For posting in the weekly discussion sessions. No account needed just to browse courses."}
         </p>
         <form onSubmit={submit}>
           <div className="auth-field">
@@ -89,7 +92,7 @@ export function RegisterForm() {
           </button>
         </form>
         <p className="auth-footer-note">
-          Already have an account? <a href="/login">Sign in</a>.
+          Already have an account? <a href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"}>Sign in</a>.
         </p>
       </section>
     </main>

@@ -2,6 +2,8 @@ import Link from "next/link";
 import prisma from "@/lib/prisma";
 import { testimonials } from "@/lib/testimonials";
 import { publishedPosts } from "@/lib/blog";
+import { getSession } from "@/lib/session";
+import { TutorPromo } from "@/components/tutor/tutor-promo";
 
 // Featured courses and posts come straight from the DB on every request so
 // a course or post added in /admin shows up immediately; see /courses.
@@ -67,13 +69,14 @@ const COURSE_GRADIENTS: Record<string, string> = {
 };
 
 export default async function Home() {
-  const [featuredCourses, posts] = await Promise.all([
+  const [featuredCourses, posts, session] = await Promise.all([
     prisma.course.findMany({
       where: { archivedAt: null, isDraft: false },
       orderBy: { order: "asc" },
       take: 3,
     }),
     publishedPosts(3),
+    getSession(),
   ]);
 
   return (
@@ -86,7 +89,7 @@ export default async function Home() {
         <div className="container gz-hero-grid">
           <div className="gz-hero-copy">
             <p className="gz-pill">
-              <span className="gz-dot" aria-hidden="true" /> New: streaks, badges &amp; auto-graded labs
+              <span className="gz-dot" aria-hidden="true" /> New: free reading, writing &amp; maths tutor
             </p>
             <h1>
               Learn to code.
@@ -195,6 +198,13 @@ export default async function Home() {
               </Link>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ---------- Tutor ---------- */}
+      <section className="gz-section" id="tutor">
+        <div className="container">
+          <TutorPromo signedIn={Boolean(session)} />
         </div>
       </section>
 

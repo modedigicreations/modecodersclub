@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireUser } from "@/lib/session";
+import { getSession } from "@/lib/session";
+import { TutorPromo } from "@/components/tutor/tutor-promo";
 import { getTrackOverview } from "@/lib/tutor/service";
 import { TRACKS } from "@/lib/tutor/skills";
 import type { Track } from "@/lib/tutor/types";
@@ -15,7 +16,16 @@ export default async function TutorHome({
 }: {
   searchParams: Promise<{ parentAdded?: string; parentError?: string }>;
 }) {
-  const session = await requireUser();
+  const session = await getSession();
+  if (!session) {
+    return (
+      <main className="tutor-page">
+        <section className="container tutor-public">
+          <TutorPromo signedIn={false} />
+        </section>
+      </main>
+    );
+  }
   const { parentAdded, parentError } = await searchParams;
   const [literacy, numeracy, achievements] = await Promise.all([
     getTrackOverview(session.user.id, "literacy"),

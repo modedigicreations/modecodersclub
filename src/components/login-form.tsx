@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { authClient } from "@/lib/auth-client";
 
-export function LoginForm() {
+/** `next` is already checked by the page: a dashboard or tutor path, or "". */
+export function LoginForm({ next = "" }: { next?: string }) {
   const router = useRouter();
   const [errorMessage, setErrorMessage] = useState("");
   const [pending, setPending] = useState(false);
@@ -26,7 +27,7 @@ export function LoginForm() {
       }
 
       const role = (result.data?.user as { role?: string } | undefined)?.role;
-      const destination = role === "admin" ? "/admin" : role === "instructor" ? "/instructor" : "/dashboard";
+      const destination = role === "admin" ? "/admin" : role === "instructor" ? "/instructor" : next || "/dashboard";
       router.replace(destination);
       router.refresh();
     } catch (error) {
@@ -59,7 +60,7 @@ export function LoginForm() {
           </button>
         </form>
         <p className="auth-footer-note">
-          New to the community? <a href="/register">Create an account</a>.
+          New to the community? <a href={next ? `/register?next=${encodeURIComponent(next)}` : "/register"}>Create an account</a>.
         </p>
       </section>
     </main>

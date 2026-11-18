@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Practice" };
 export default async function TrackPage({ params }: { params: Promise<{ track: string }> }) {
   const { track } = await params;
   if (!isTrack(track)) notFound();
-  const session = await requireUser();
+  const session = await requireUser(`/tutor/${track}`);
   const overview = await getTrackOverview(session.user.id, track);
   if (!overview.placement && overview.skills.every((s) => s.attempts === 0)) redirect(`/tutor/${track}/placement`);
   const meta = TRACKS[track];
